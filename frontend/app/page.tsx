@@ -13,6 +13,7 @@ async function getBarbershops() {
       cache: "no-store",
     });
     return res.json();
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
   } catch (error) {
     return [];
   }
@@ -45,7 +46,7 @@ export default async function Home() {
       </nav>
 
       {/* --- HERO SECTION (A promessa) --- */}
-      <header className="text-center py-20 px-4 bg-gradient-to-b from-white to-blue-50">
+      <header className="text-center py-20 px-4 bg-linear-to-b from-white to-blue-50">
         <h1 className="text-5xl md:text-6xl font-extrabold text-gray-900 mb-6 tracking-tight">
           A revolução na gestão da <br />
           <span className="text-blue-600">sua barbearia.</span>
@@ -60,12 +61,6 @@ export default async function Home() {
             className="bg-blue-600 text-white px-8 py-4 rounded-lg font-bold text-lg hover:bg-blue-700 shadow-lg hover:shadow-xl transition-all"
           >
             Criar Minha Barbearia Agora
-          </Link>
-          <Link
-            href="/super-admin"
-            className="px-8 py-4 rounded-lg font-bold text-gray-500 hover:text-gray-800"
-          >
-            Acesso Super Admin (Demo)
           </Link>
         </div>
       </header>

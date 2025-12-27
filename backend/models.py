@@ -12,6 +12,11 @@ class Barbershop(SQLModel, table=True):
     email: str = Field(unique=True, index=True) # Login
     password: str  # Senha (num app real, usaríamos hash, mas faremos simples pro MVP)
     is_active: bool = Field(default=True) # Se False, o login é bloqueado (falta de pagamento)
+
+    # --- CAMPOS DE FUNCIONAMENTO ---
+    open_time: str = Field(default="09:00")  # Ex: "09:00"
+    close_time: str = Field(default="18:00") # Ex: "18:00"
+    work_days: str = Field(default="Segunda a Sábado") # Texto simples
     
     services: List["Service"] = Relationship(back_populates="barbershop")
     bookings: List["Booking"] = Relationship(back_populates="barbershop") # <--- Nova relação

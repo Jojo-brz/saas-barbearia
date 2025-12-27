@@ -10,22 +10,25 @@ interface Barbershop {
 }
 
 export default function SuperAdmin() {
+  // Estado de Autenticação
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [passwordInput, setPasswordInput] = useState("");
+
   const [shops, setShops] = useState<Barbershop[]>([]);
 
-  // Carrega todas as barbearias
+  // Carrega as barbearias (Só busca se estiver logado para economizar dados)
   useEffect(() => {
-    fetch("http://127.0.0.1:8000/barbershops/")
-      .then((res) => res.json())
-      .then((data) => setShops(data));
-  }, []);
+    if (isAuthenticated) {
+      fetch("http://127.0.0.1:8000/barbershops/")
+        .then((res) => res.json())
+        .then((data) => setShops(data));
+    }
+  }, [isAuthenticated]);
 
-  // Função para Bloquear/Desbloquear
   const toggleStatus = async (id: number) => {
     await fetch(`http://127.0.0.1:8000/admin/toggle_status/${id}`, {
       method: "POST",
     });
-
-    // Atualiza a lista na tela
     setShops(
       shops.map((shop) =>
         shop.id === id ? { ...shop, is_active: !shop.is_active } : shop
@@ -33,6 +36,43 @@ export default function SuperAdmin() {
     );
   };
 
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    // --- SUA SENHA MESTRA AQUI ---
+    if (passwordInput === "admin123") {
+      setIsAuthenticated(true);
+    } else {
+      alert("Senha incorreta!");
+    }
+  };
+
+  // Se não tiver senha, mostra tela de bloqueio
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <form
+          onSubmit={handleLogin}
+          className="bg-gray-900 p-8 rounded-lg text-center"
+        >
+          <h1 className="text-white text-2xl font-bold mb-4">
+            Área Restrita ⛔
+          </h1>
+          <input
+            type="password"
+            placeholder="Senha Mestra"
+            className="p-2 rounded text-black mb-4 w-full"
+            value={passwordInput}
+            onChange={(e) => setPasswordInput(e.target.value)}
+          />
+          <button className="bg-red-600 text-white px-4 py-2 rounded font-bold hover:bg-red-700 w-full">
+            Acessar
+          </button>
+        </form>
+      </div>
+    );
+  }
+
+  // Se tiver senha, mostra o painel
   return (
     <div className="min-h-screen bg-gray-900 text-white p-10">
       <h1 className="text-3xl font-bold mb-8 text-yellow-500">
@@ -76,7 +116,7 @@ export default function SuperAdmin() {
                         : "bg-green-500 hover:bg-green-600 text-white"
                     }`}
                   >
-                    {shop.is_active ? "Bloquear Acesso" : "Reativar Acesso"}
+                    {shop.is_active ? "Bloquear" : "Ativar"}
                   </button>
                 </td>
               </tr>
