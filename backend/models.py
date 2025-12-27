@@ -7,6 +7,11 @@ class Barbershop(SQLModel, table=True):
     name: str
     slug: str = Field(unique=True, index=True)
     address: Optional[str] = None
+
+    # NOVOS CAMPOS DE SEGURANÇA
+    email: str = Field(unique=True, index=True) # Login
+    password: str  # Senha (num app real, usaríamos hash, mas faremos simples pro MVP)
+    is_active: bool = Field(default=True) # Se False, o login é bloqueado (falta de pagamento)
     
     services: List["Service"] = Relationship(back_populates="barbershop")
     bookings: List["Booking"] = Relationship(back_populates="barbershop") # <--- Nova relação

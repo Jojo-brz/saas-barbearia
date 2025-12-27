@@ -1,3 +1,4 @@
+from pydantic import BaseModel
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -94,3 +95,41 @@ def read_barbershop_bookings(slug_url: str, session: Session = Depends(get_sessi
         raise HTTPException(status_code=404, detail="Barbearia não encontrada")
         
     return barbershop.bookings
+
+# Classe para receber os dados do Login
+class LoginData(BaseModel):
+    email: str
+    password: str
+
+# --- ROTA DE LOGIN ---
+@app.post("/login")
+def login(data: LoginData, session: Session = Depends(get_session)):
+    # Busca a barbearia pelo e-mail
+    statement = select(Barbershop).where(Barbershop.email == data.email)
+    shop = session.exec(statement).first()
+
+    # 1. Verifica se existe e se a senha bate
+    if not shop or shop.password != data.password:
+        raise HTTPException(status_code=401, detail="E-mail ou senha incorretos")
+    
+    # 2. Verifica se você (Super Admin) bloqueou por falta de pagamento
+    if not shop.is_active:
+        raise HTTPException(status_code=403, detail="Conta suspensa. Contate o suporte financeiro.")
+
+    # Se tudo ok, retorna o SLUG para o frontend redirecionar
+    return {"slug": shop.slug, "name": shop.name}
+
+# --- ROTAS DO SUPER ADMIN (VOCÊ) ---
+
+# 1. Bloquear/Desbloquear Barbearia (Toggle)
+@app.post("/admin/toggle_status/{barbershop_id}")
+def toggle_status(barbershop_id: int, session: Session = Depends(get_session)):
+    shop = session.get(Barbershop, barbershop_id)
+    if not shop:
+        raise HTTPException(status_code=404, detail="Barbearia não encontrada")
+    
+    # Inverte o status (Se tá ativo, bloqueia. Se tá bloqueado, ativa)
+    shop.is_active = not shop.is_active
+    session.add(shop)
+    session.commit()
+    return {"status": "Updated", "is_active": shop.is_active}
