@@ -39,6 +39,31 @@ def create_barbershop(barbershop: Barbershop, session: Session = Depends(get_ses
     session.refresh(barbershop)
     return barbershop
 
+# --ROTAS PARA MUDAR SENHA E EMAIL--
+
+# 1. Modelo para validar os dados que chegam
+class BarbershopUpdateAuth(BaseModel):
+    email: Optional[str] = None
+    password: Optional[str] = None
+
+# 2. Rota PUT para atualizar a barbearia
+@app.put("/admin/update_barbershop/{barbershop_id}")
+def update_barbershop_auth(barbershop_id: int, data: BarbershopUpdateAuth, session: Session = Depends(get_session)):
+    shop = session.get(Barbershop, barbershop_id)
+    if not shop:
+        raise HTTPException(status_code=404, detail="Barbearia não encontrada")
+    
+    # Só atualiza se o valor foi enviado
+    if data.email:
+        shop.email = data.email
+    if data.password:
+        shop.password = data.password
+        
+    session.add(shop)
+    session.commit()
+    session.refresh(shop)
+    return shop
+
 @app.get("/barbershops/", response_model=list[Barbershop])
 def read_barbershops(session: Session = Depends(get_session)):
     barbershops = session.exec(select(Barbershop)).all()
