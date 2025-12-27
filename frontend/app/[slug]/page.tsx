@@ -1,4 +1,5 @@
 import Link from "next/link";
+import ServiceList from "../../src/components/ServerLIst"; // <--- Importamos o novo componente
 
 // Tipos
 interface Service {
@@ -15,47 +16,32 @@ interface Barbershop {
   address?: string;
 }
 
-// Buscar dados da Barbearia
+// Funções de busca (Fetch)
 async function getBarbershop(slug: string): Promise<Barbershop | null> {
   const res = await fetch(`http://127.0.0.1:8000/barbershops/${slug}`, {
     cache: "no-store",
   });
-
-  if (!res.ok) {
-    return null;
-  }
-
+  if (!res.ok) return null;
   return res.json();
 }
 
-// Buscar serviços da Barbearia
 async function getServices(slug: string): Promise<Service[]> {
   const res = await fetch(
     `http://127.0.0.1:8000/barbershops/${slug}/services`,
-    {
-      cache: "no-store",
-    }
+    { cache: "no-store" }
   );
-
-  if (!res.ok) {
-    return [];
-  }
-
+  if (!res.ok) return [];
   return res.json();
 }
 
 export default async function BarbershopPage({
   params,
 }: {
-  // MUDANÇA 1: Avisamos que params é uma Promessa
   params: Promise<{ slug: string }>;
 }) {
-  // MUDANÇA 2: Esperamos a promessa resolver para pegar o slug
   const { slug } = await params;
-
-  // Agora usamos a variável 'slug' limpa
   const shop = await getBarbershop(slug);
-  const services: Service[] = await getServices(slug);
+  const services = await getServices(slug);
 
   if (!shop) return <div>Barbearia não encontrada.</div>;
 
@@ -73,37 +59,8 @@ export default async function BarbershopPage({
           Nossos Serviços
         </h2>
 
-        <div className="flex flex-col gap-4">
-          {services.length === 0 ? (
-            <p className="text-gray-500 italic">
-              Nenhum serviço cadastrado ainda.
-            </p>
-          ) : (
-            services.map((service) => (
-              <div
-                key={service.id}
-                className="flex justify-between items-center p-4 bg-gray-50 rounded-lg border hover:border-blue-500 cursor-pointer group"
-              >
-                <div>
-                  <h3 className="font-bold text-lg text-gray-800">
-                    {service.name}
-                  </h3>
-                  <p className="text-sm text-gray-500">
-                    ⏱ {service.duration} min
-                  </p>
-                </div>
-                <div className="text-right">
-                  <span className="block font-bold text-blue-600 text-lg">
-                    R$ {service.price.toFixed(2)}
-                  </span>
-                  <button className="text-xs bg-blue-600 text-white px-3 py-1 rounded mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    Reservar
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
+        {/* Aqui substituímos todo aquele código antigo pelo nosso componente */}
+        <ServiceList services={services} barbershopId={shop.id} />
 
         <div className="mt-8 text-center">
           <Link href="/" className="text-blue-500 hover:underline">

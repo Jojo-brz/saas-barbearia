@@ -3,7 +3,8 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import Session, select
 from database import create_db_and_tables, get_session
-from models import Barbershop, Service, ServiceCreate 
+from models import Barbershop, Service, ServiceCreate
+from models import Barbershop, Service, ServiceCreate, Booking, BookingCreate
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -67,3 +68,29 @@ def read_barbershop_services(slug_url: str, session: Session = Depends(get_sessi
     if not barbershop:
         raise HTTPException(status_code=404, detail="Barbearia não encontrada")
     return barbershop.services
+
+# --- ROTAS DE AGENDAMENTO ---
+
+@app.post("/bookings/", response_model=Booking)
+def create_booking(booking_data: BookingCreate, session: Session = Depends(get_session)):
+    # 1. Validar se a barbearia e o serviço existem
+    # (Poderíamos adicionar validações extras aqui, como checar horário livre)
+    
+    # 2. Salvar o agendamento
+    booking = Booking.model_validate(booking_data)
+    session.add(booking)
+    session.commit()
+    session.refresh(booking)
+    
+    return booking
+
+@app.get("/barbershops/{slug_url}/bookings", response_model=list[Booking])
+def read_barbershop_bookings(slug_url: str, session: Session = Depends(get_session)):
+    # Busca a barbearia
+    statement = select(Barbershop).where(Barbershop.slug == slug_url)
+    barbershop = session.exec(statement).first()
+    
+    if not barbershop:
+        raise HTTPException(status_code=404, detail="Barbearia não encontrada")
+        
+    return barbershop.bookings
