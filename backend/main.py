@@ -1,3 +1,9 @@
+import json
+import shutil
+import os
+import uuid
+from fastapi import UploadFile, File
+from fastapi.staticfiles import StaticFiles
 from typing import Optional
 from pydantic import BaseModel
 from datetime import datetime
@@ -6,8 +12,8 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import Session, select
 from database import create_db_and_tables, get_session
-from models import Barbershop, Service, ServiceCreate
-from models import Barbershop, Service, ServiceCreate, Booking, BookingCreate
+# Import único e consolidado
+from models import Barbershop, BookingBase, Service, ServiceCreate, Booking, BookingCreate
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -26,6 +32,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# --- CONFIGURAÇÃO DE ARQUIVOS ESTÁTICOS ---
+# Isso permite acessar a imagem via http://localhost:8000/images/nome-do-arquivo.jpg
+os.makedirs("uploads", exist_ok=True) # Cria a pasta se não existir
+app.mount("/images", StaticFiles(directory="uploads"), name="images")
+
+
 @app.get("/")
 def read_root():
     return {"mensagem": "API SaaS Barbearia Online"}
@@ -39,21 +51,74 @@ def create_barbershop(barbershop: Barbershop, session: Session = Depends(get_ses
     session.refresh(barbershop)
     return barbershop
 
+@app.get("/barbershops/", response_model=list[Barbershop])
+def read_barbershops(session: Session = Depends(get_session)):
+    barbershops = session.exec(select(Barbershop)).all()
+    return barbershops
+
+@app.get("/barbershops/{slug}", response_model=Barbershop)
+def read_barbershop_by_slug(slug: str, session: Session = Depends(get_session)):
+    statement = select(Barbershop).where(Barbershop.slug == slug)
+    barbershop = session.exec(statement).first()
+    if not barbershop:
+        raise HTTPException(status_code=404, detail="Barbearia não encontrada")
+    return barbershop
+
+# --- ROTA PARA O BARBEIRO ATUALIZAR OS HORÁRIOS ---
+class HoursUpdate(BaseModel):
+    hours_config: str # Recebe o JSON como string
+
+@app.put("/barbershops/{barbershop_id}/hours")
+def update_hours(barbershop_id: int, data: HoursUpdate, session: Session = Depends(get_session)):
+    shop = session.get(Barbershop, barbershop_id)
+    if not shop:
+        raise HTTPException(status_code=404, detail="Barbearia não encontrada")
+    
+    shop.hours_config = data.hours_config
+    session.add(shop)
+    session.commit()
+    return {"ok": True}
+
+# --- ROTA DE UPLOAD DE LOGO ---
+class LogoUpdate(BaseModel):
+    logo_url: str
+
+@app.put("/barbershops/{barbershop_id}/logo")
+def update_logo(barbershop_id: int, data: LogoUpdate, session: Session = Depends(get_session)):
+    shop = session.get(Barbershop, barbershop_id)
+    if not shop: raise HTTPException(status_code=404, detail="Barbearia não encontrada")
+    shop.logo_url = data.logo_url
+    session.add(shop)
+    session.commit()
+    return {"ok": True}
+
+# --- ROTA DE UPLOAD DE ARQUIVOS ---
+@app.post("/upload/")
+async def upload_file(file: UploadFile = File(...)):
+    # Gera um nome único para não substituir arquivos iguais
+    file_extension = file.filename.split(".")[-1]
+    new_filename = f"{uuid.uuid4()}.{file_extension}"
+    file_path = f"uploads/{new_filename}"
+    
+    # Salva no disco
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+        
+    # Retorna a URL completa para o frontend salvar no banco
+    return {"url": f"http://127.0.0.1:8000/images/{new_filename}"}
+
 # --ROTAS PARA MUDAR SENHA E EMAIL--
 
-# 1. Modelo para validar os dados que chegam
 class BarbershopUpdateAuth(BaseModel):
     email: Optional[str] = None
     password: Optional[str] = None
 
-# 2. Rota PUT para atualizar a barbearia
 @app.put("/admin/update_barbershop/{barbershop_id}")
 def update_barbershop_auth(barbershop_id: int, data: BarbershopUpdateAuth, session: Session = Depends(get_session)):
     shop = session.get(Barbershop, barbershop_id)
     if not shop:
         raise HTTPException(status_code=404, detail="Barbearia não encontrada")
     
-    # Só atualiza se o valor foi enviado
     if data.email:
         shop.email = data.email
     if data.password:
@@ -64,25 +129,31 @@ def update_barbershop_auth(barbershop_id: int, data: BarbershopUpdateAuth, sessi
     session.refresh(shop)
     return shop
 
-@app.get("/barbershops/", response_model=list[Barbershop])
-def read_barbershops(session: Session = Depends(get_session)):
-    barbershops = session.exec(select(Barbershop)).all()
-    return barbershops
-
-@app.get("/barbershops/{slug_url}", response_model=Barbershop)
-def read_single_barbershop(slug_url: str, session: Session = Depends(get_session)):
-    statement = select(Barbershop).where(Barbershop.slug == slug_url)
-    barbershop = session.exec(statement).first()
-    if not barbershop:
+# Rota para EXCLUIR Barbearia (SOMENTE SUPER ADMIN)
+@app.delete("/admin/barbershops/{barbershop_id}")
+def delete_barbershop(barbershop_id: int, session: Session = Depends(get_session)):
+    shop = session.get(Barbershop, barbershop_id)
+    if not shop:
         raise HTTPException(status_code=404, detail="Barbearia não encontrada")
-    return barbershop
+    
+    # 1. Apagar todos os agendamentos dessa barbearia
+    for booking in shop.bookings:
+        session.delete(booking)
+        
+    # 2. Apagar todos os serviços dessa barbearia
+    for service in shop.services:
+        session.delete(service)
+        
+    # 3. Finalmente, apagar a barbearia
+    session.delete(shop)
+    
+    session.commit()
+    return {"ok": True}
 
 # --- ROTAS SERVIÇOS ---
 
-# AQUI ESTAVA O SEGREDO: Usar ServiceCreate na entrada
 @app.post("/services/", response_model=Service)
 def create_service(service_data: ServiceCreate, session: Session = Depends(get_session)):
-    # Valida e converte
     service = Service.model_validate(service_data)
     session.add(service)
     session.commit()
@@ -97,9 +168,6 @@ def read_barbershop_services(slug_url: str, session: Session = Depends(get_sessi
         raise HTTPException(status_code=404, detail="Barbearia não encontrada")
     return barbershop.services
 
-# --- ROTAS DE SERVIÇOS (NOVAS: UPDATE E DELETE) ---
-
-# Rota para Deletar Serviço
 @app.delete("/services/{service_id}")
 def delete_service(service_id: int, session: Session = Depends(get_session)):
     service = session.get(Service, service_id)
@@ -109,11 +177,11 @@ def delete_service(service_id: int, session: Session = Depends(get_session)):
     session.commit()
     return {"ok": True}
 
-# Rota para Editar Serviço
 class ServiceUpdate(BaseModel):
     name: Optional[str] = None
     price: Optional[float] = None
     duration: Optional[int] = None
+    image_url: Optional[str] = None
 
 @app.put("/services/{service_id}", response_model=Service)
 def update_service(service_id: int, service_data: ServiceUpdate, session: Session = Depends(get_session)):
@@ -121,7 +189,6 @@ def update_service(service_id: int, service_data: ServiceUpdate, session: Sessio
     if not service:
         raise HTTPException(status_code=404, detail="Serviço não encontrado")
     
-    # Atualiza apenas os campos enviados
     if service_data.name: service.name = service_data.name
     if service_data.price: service.price = service_data.price
     if service_data.duration: service.duration = service_data.duration
@@ -131,94 +198,102 @@ def update_service(service_id: int, service_data: ServiceUpdate, session: Sessio
     session.refresh(service)
     return service
 
-# --- ROTA DE AGENDAMENTO COM VALIDAÇÃO ---
-# Substitua a rota 'create_booking' antiga por esta nova:
+# --- ROTAS DE AGENDAMENTO (BOOKINGS) ---
 
-@app.post("/bookings/", response_model=Booking)
-def create_booking(booking_data: BookingCreate, session: Session = Depends(get_session)):
-    # 1. Busca a barbearia para ver os horários
-    shop = session.get(Barbershop, booking_data.barbershop_id)
-    if not shop:
-        raise HTTPException(status_code=404, detail="Barbearia não encontrada")
+# Modelo de leitura que inclui DURAÇÃO (IMPORTANTE: Manter este)
+class BookingRead(BookingBase):
+    id: int
+    service_duration: int
 
-    # 2. Lógica de Validação de Horário
-    # O formato date_time vem como "2023-10-25T14:30"
-    booking_dt = datetime.fromisoformat(booking_data.date_time)
-    booking_time_str = booking_dt.strftime("%H:%M") # Pega só "14:30"
-
-    # Compara strings: "09:00" <= "14:30" <= "18:00"
-    if booking_time_str < shop.open_time or booking_time_str >= shop.close_time:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Barbearia fechada neste horário. Funcionamento: {shop.open_time} às {shop.close_time}"
-        )
-
-    # 3. Salva
-    booking = Booking.model_validate(booking_data)
-    session.add(booking)
-    session.commit()
-    session.refresh(booking)
-    return booking
-
-# --- ROTAS DE AGENDAMENTO ---
-
-@app.post("/bookings/", response_model=Booking)
-def create_booking(booking_data: BookingCreate, session: Session = Depends(get_session)):
-    # 1. Validar se a barbearia e o serviço existem
-    # (Poderíamos adicionar validações extras aqui, como checar horário livre)
-    
-    # 2. Salvar o agendamento
-    booking = Booking.model_validate(booking_data)
-    session.add(booking)
-    session.commit()
-    session.refresh(booking)
-    
-    return booking
-
-@app.get("/barbershops/{slug_url}/bookings", response_model=list[Booking])
+@app.get("/barbershops/{slug_url}/bookings", response_model=list[BookingRead])
 def read_barbershop_bookings(slug_url: str, session: Session = Depends(get_session)):
-    # Busca a barbearia
     statement = select(Barbershop).where(Barbershop.slug == slug_url)
     barbershop = session.exec(statement).first()
     
     if not barbershop:
         raise HTTPException(status_code=404, detail="Barbearia não encontrada")
+    
+    results = []
+    for booking in barbershop.bookings:
+        service = session.get(Service, booking.service_id)
+        duration = service.duration if service else 30
         
-    return barbershop.bookings
+        results.append(BookingRead(
+            id=booking.id,
+            customer_name=booking.customer_name,
+            customer_phone=booking.customer_phone,
+            date_time=booking.date_time,
+            barbershop_id=booking.barbershop_id,
+            service_id=booking.service_id,
+            service_duration=duration
+        ))
+        
+    return results
 
-# Classe para receber os dados do Login
+# Criação de agendamento COM VALIDAÇÃO DE HORÁRIO (IMPORTANTE: Manter este)
+@app.post("/bookings/", response_model=Booking)
+def create_booking(booking_data: BookingCreate, session: Session = Depends(get_session)):
+    shop = session.get(Barbershop, booking_data.barbershop_id)
+    if not shop:
+        raise HTTPException(status_code=404, detail="Barbearia não encontrada")
+
+    # 1. Descobrir qual dia da semana é o agendamento
+    booking_dt = datetime.fromisoformat(booking_data.date_time)
+    day_name = booking_dt.strftime("%A").lower() 
+    booking_time = booking_dt.strftime("%H:%M")
+
+    # 2. Ler a configuração daquele dia
+    try:
+        config = json.loads(shop.hours_config)
+        day_config = config.get(day_name)
+    except:
+        day_config = {"open": "09:00", "close": "18:00", "active": True}
+
+    # 3. Validar
+    dias_pt = {"monday": "Segunda", "tuesday": "Terça", "wednesday": "Quarta", "thursday": "Quinta", "friday": "Sexta", "saturday": "Sábado", "sunday": "Domingo"}
+    nome_dia = dias_pt.get(day_name, day_name)
+
+    if not day_config or not day_config.get("active"):
+        raise HTTPException(status_code=400, detail=f"A barbearia não abre aos {nome_dia}s.")
+
+    if booking_time < day_config["open"] or booking_time >= day_config["close"]:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Fechado. Aos {nome_dia}s funcionamos das {day_config['open']} às {day_config['close']}"
+        )
+
+    # 4. Salvar
+    booking = Booking.model_validate(booking_data)
+    session.add(booking)
+    session.commit()
+    session.refresh(booking)
+    return booking
+
+# --- AUTH / LOGIN ---
+
 class LoginData(BaseModel):
     email: str
     password: str
 
-# --- ROTA DE LOGIN ---
 @app.post("/login")
 def login(data: LoginData, session: Session = Depends(get_session)):
-    # Busca a barbearia pelo e-mail
     statement = select(Barbershop).where(Barbershop.email == data.email)
     shop = session.exec(statement).first()
 
-    # 1. Verifica se existe e se a senha bate
     if not shop or shop.password != data.password:
         raise HTTPException(status_code=401, detail="E-mail ou senha incorretos")
     
-    # 2. Verifica se você (Super Admin) bloqueou por falta de pagamento
     if not shop.is_active:
         raise HTTPException(status_code=403, detail="Conta suspensa. Contate o suporte financeiro.")
 
-    # Se tudo ok, retorna o SLUG para o frontend redirecionar
     return {"slug": shop.slug, "name": shop.name}
 
-# --- ROTAS DO SUPER ADMIN ---
-
-# 1. Bloquear/Desbloquear Barbearia (Toggle)
 @app.post("/admin/toggle_status/{barbershop_id}")
 def toggle_status(barbershop_id: int, session: Session = Depends(get_session)):
     shop = session.get(Barbershop, barbershop_id)
     if not shop:
         raise HTTPException(status_code=404, detail="Barbearia não encontrada")
     
-    # Inverte o status (Se tá ativo, bloqueia. Se tá bloqueado, ativa)
     shop.is_active = not shop.is_active
     session.add(shop)
     session.commit()

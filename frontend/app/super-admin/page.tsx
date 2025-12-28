@@ -16,7 +16,7 @@ export default function SuperAdmin() {
   const [shops, setShops] = useState<Barbershop[]>([]);
   const [showCreateForm, setShowCreateForm] = useState(false);
 
-  // --- ESTADOS PARA EDIÇÃO (Modal) ---
+  // Estados para Edição
   const [editingShop, setEditingShop] = useState<Barbershop | null>(null);
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -46,16 +46,34 @@ export default function SuperAdmin() {
     else alert("Senha incorreta!");
   };
 
-  // --- FUNÇÕES DE EDIÇÃO ---
+  // --- NOVA FUNÇÃO: EXCLUIR BARBEARIA ---
+  const handleDeleteShop = async (id: number, name: string) => {
+    const confirmMessage = `ATENÇÃO: Você está prestes a excluir a barbearia "${name}".\n\nIsso apagará PERMANENTEMENTE todos os serviços e agendamentos dela.\n\nTem certeza absoluta?`;
+
+    if (window.confirm(confirmMessage)) {
+      const res = await fetch(`http://127.0.0.1:8000/admin/barbershops/${id}`, {
+        method: "DELETE",
+      });
+
+      if (res.ok) {
+        // Remove da lista visualmente
+        setShops(shops.filter((shop) => shop.id !== id));
+        alert("Barbearia excluída com sucesso.");
+      } else {
+        alert("Erro ao excluir barbearia.");
+      }
+    }
+  };
+
+  // Funções de Edição
   const startEditing = (shop: Barbershop) => {
     setEditingShop(shop);
-    setNewEmail(shop.email); // Já preenche com o email atual
-    setNewPassword(""); // Senha começa vazia (só preenche se quiser mudar)
+    setNewEmail(shop.email);
+    setNewPassword("");
   };
 
   const saveEdit = async () => {
     if (!editingShop) return;
-
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const data: any = {};
     if (newEmail) data.email = newEmail;
@@ -71,14 +89,13 @@ export default function SuperAdmin() {
     );
 
     if (res.ok) {
-      alert("Dados atualizados com sucesso!");
-      // Atualiza a lista localmente
+      alert("Dados atualizados!");
       setShops(
         shops.map((s) =>
           s.id === editingShop.id ? { ...s, email: newEmail } : s
         )
       );
-      setEditingShop(null); // Fecha o modal
+      setEditingShop(null);
     } else {
       alert("Erro ao atualizar.");
     }
@@ -111,7 +128,7 @@ export default function SuperAdmin() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-6 md:p-10 relative">
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-yellow-500">
             🕵️‍♂️ Painel Super Admin
@@ -167,25 +184,32 @@ export default function SuperAdmin() {
                     )}
                   </td>
                   <td className="p-4 text-right flex justify-end gap-2">
-                    {/* BOTÃO EDITAR SENHA/EMAIL */}
                     <button
                       onClick={() => startEditing(shop)}
                       className="px-3 py-1 rounded font-bold text-xs bg-blue-600 hover:bg-blue-500 text-white"
-                      title="Alterar Senha/Email"
+                      title="Editar Senha/Email"
                     >
                       ✏️ Editar
                     </button>
 
-                    {/* BOTÃO BLOQUEAR */}
                     <button
                       onClick={() => toggleStatus(shop.id)}
                       className={`px-3 py-1 rounded font-bold text-xs border ${
                         shop.is_active
-                          ? "bg-transparent text-red-400 border-red-500 hover:bg-red-900"
+                          ? "bg-transparent text-yellow-400 border-yellow-500 hover:bg-yellow-900"
                           : "bg-green-600 text-white border-green-600 hover:bg-green-700"
                       }`}
                     >
                       {shop.is_active ? "BLOQUEAR" : "ATIVAR"}
+                    </button>
+
+                    {/* BOTÃO EXCLUIR */}
+                    <button
+                      onClick={() => handleDeleteShop(shop.id, shop.name)}
+                      className="px-3 py-1 rounded font-bold text-xs bg-red-600 hover:bg-red-500 text-white border border-red-700"
+                      title="Excluir Definitivamente"
+                    >
+                      🗑️
                     </button>
                   </td>
                 </tr>
@@ -195,14 +219,12 @@ export default function SuperAdmin() {
         </div>
       </div>
 
-      {/* --- MODAL DE EDIÇÃO (OVERLAY) --- */}
       {editingShop && (
         <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4">
           <div className="bg-gray-800 p-6 rounded-lg shadow-2xl w-full max-w-md border border-gray-600">
             <h2 className="text-xl font-bold mb-4 text-white">
               Editar Acesso: {editingShop.name}
             </h2>
-
             <div className="space-y-4">
               <div>
                 <label className="block text-gray-400 text-sm mb-1">
@@ -210,28 +232,23 @@ export default function SuperAdmin() {
                 </label>
                 <input
                   type="email"
-                  className="w-full p-2 rounded bg-gray-700 text-white border border-gray-600 focus:border-blue-500 outline-none"
+                  className="w-full p-2 rounded bg-gray-700 text-white border border-gray-600 outline-none"
                   value={newEmail}
                   onChange={(e) => setNewEmail(e.target.value)}
                 />
               </div>
-
               <div>
                 <label className="block text-gray-400 text-sm mb-1">
-                  Alterar Senha (Opcional)
+                  Alterar Senha
                 </label>
                 <input
-                  type="text" // Deixei text para você ver a senha que está digitando
-                  placeholder="Digite nova senha apenas se quiser mudar"
-                  className="w-full p-2 rounded bg-gray-700 text-white border border-gray-600 focus:border-blue-500 outline-none"
+                  type="text"
+                  placeholder="Digite para mudar"
+                  className="w-full p-2 rounded bg-gray-700 text-white border border-gray-600 outline-none"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                 />
-                <p className="text-xs text-gray-500 mt-1">
-                  Deixe em branco para manter a senha atual.
-                </p>
               </div>
-
               <div className="flex gap-3 mt-6">
                 <button
                   onClick={() => setEditingShop(null)}
@@ -243,7 +260,7 @@ export default function SuperAdmin() {
                   onClick={saveEdit}
                   className="flex-1 bg-blue-600 hover:bg-blue-500 text-white py-2 rounded font-bold"
                 >
-                  Salvar Alterações
+                  Salvar
                 </button>
               </div>
             </div>

@@ -1,36 +1,19 @@
 "use client";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 
 export default function BarbershopForm() {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const router = useRouter();
-
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
-  // NOVOS CAMPOS
-  const [openTime, setOpenTime] = useState("09:00");
-  const [closeTime, setCloseTime] = useState("18:00");
-  const [workDays, setWorkDays] = useState("Segunda a Sábado");
-
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
-    const data = {
-      name,
-      slug,
-      email,
-      password,
-      open_time: openTime,
-      close_time: closeTime,
-      work_days: workDays,
-    };
+    // Não mandamos mais open_time/close_time. O backend usará o DEFAULT_HOURS.
+    const data = { name, slug, email, password };
 
     try {
       const response = await fetch("http://127.0.0.1:8000/barbershops/", {
@@ -94,35 +77,10 @@ export default function BarbershopForm() {
           required
         />
 
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="text-xs text-gray-500">Abre às:</label>
-            <input
-              type="time"
-              className="border p-2 rounded w-full"
-              value={openTime}
-              onChange={(e) => setOpenTime(e.target.value)}
-              required
-            />
-          </div>
-          <div>
-            <label className="text-xs text-gray-500">Fecha às:</label>
-            <input
-              type="time"
-              className="border p-2 rounded w-full"
-              value={closeTime}
-              onChange={(e) => setCloseTime(e.target.value)}
-              required
-            />
-          </div>
-        </div>
-        <input
-          type="text"
-          placeholder="Dias (Ex: Seg a Sex)"
-          className="border p-2 rounded"
-          value={workDays}
-          onChange={(e) => setWorkDays(e.target.value)}
-        />
+        <p className="text-xs text-gray-500 italic">
+          * A barbearia será criada com horário padrão (Seg-Sáb). O proprietário
+          poderá alterar no painel dele.
+        </p>
 
         <button
           type="submit"
