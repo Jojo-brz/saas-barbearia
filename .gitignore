@@ -1,0 +1,26 @@
+# --- ARQUIVOS DE SISTEMA E IDE ---
+.DS_Store
+.vscode/
+.idea/
+
+# --- SEGURANÇA (NUNCA SUBIR) ---
+.env
+.env.local
+*.pem
+*.key
+
+# --- BACKEND (Python) ---
+backend/venv/
+backend/__pycache__/
+backend/*.pyc
+backend/database.db   # Não subimos o banco local
+backend/uploads/* # Não subimos fotos de teste
+!backend/uploads/.gitkeep # Mantém a pasta uploads vazia
+
+# --- FRONTEND (Node/Next.js) ---
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/.vercel/
+frontend/*.log

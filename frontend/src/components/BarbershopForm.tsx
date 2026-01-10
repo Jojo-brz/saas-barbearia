@@ -1,26 +1,21 @@
-"use client"; // <--- Isso é OBRIGATÓRIO para usar useState e interatividade
-
+"use client";
 import { useState } from "react";
-import { useRouter } from "next/navigation"; // Para recarregar a página após salvar
 
 export default function BarbershopForm() {
-  const router = useRouter();
-
-  // Estados para guardar o que o usuário digita
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
-  const [address, setAddress] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Função que roda quando clica em "Salvar"
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); // Não deixa a página recarregar do jeito antigo
+    e.preventDefault();
     setLoading(true);
 
-    const data = { name, slug, address };
+    // Não mandamos mais open_time/close_time. O backend usará o DEFAULT_HOURS.
+    const data = { name, slug, email, password };
 
     try {
-      // Envia os dados para o Python
       const response = await fetch("http://127.0.0.1:8000/barbershops/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -29,18 +24,13 @@ export default function BarbershopForm() {
 
       if (response.ok) {
         alert("Barbearia criada com sucesso!");
-        // Limpa os campos
-        setName("");
-        setSlug("");
-        setAddress("");
-        // Recarrega a página para mostrar a nova barbearia na lista
-        router.refresh();
+        window.location.reload();
       } else {
-        alert("Erro ao criar (verifique se o Slug já existe).");
+        alert("Erro ao criar (Email ou Slug já existem).");
       }
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error) {
-      console.error(error);
-      alert("Erro de conexão com o servidor.");
+      alert("Erro de conexão.");
     } finally {
       setLoading(false);
     }
@@ -49,45 +39,55 @@ export default function BarbershopForm() {
   return (
     <form
       onSubmit={handleSubmit}
-      className="bg-white p-6 rounded-lg shadow-md mb-8 border border-gray-200"
+      className="bg-white p-6 rounded-lg shadow-md border border-gray-200 text-black"
     >
-      <h3 className="text-lg font-bold mb-4 text-gray-800">
-        Cadastrar Nova Barbearia
-      </h3>
+      <h3 className="text-lg font-bold mb-4">Cadastrar Nova Barbearia</h3>
 
       <div className="flex flex-col gap-4">
         <input
           type="text"
-          placeholder="Nome da Barbearia (ex: Cortes do Jaca)"
-          className="border p-2 rounded text-black"
+          placeholder="Nome da Barbearia"
+          className="border p-2 rounded"
           value={name}
           onChange={(e) => setName(e.target.value)}
           required
         />
-
         <input
           type="text"
-          placeholder="Slug / Link Único (ex: cortes-do-jaca)"
-          className="border p-2 rounded text-black"
+          placeholder="Slug (Link único)"
+          className="border p-2 rounded"
           value={slug}
           onChange={(e) => setSlug(e.target.value)}
           required
         />
-
         <input
-          type="text"
-          placeholder="Endereço"
-          className="border p-2 rounded text-black"
-          value={address}
-          onChange={(e) => setAddress(e.target.value)}
+          type="email"
+          placeholder="E-mail de Login"
+          className="border p-2 rounded"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
         />
+        <input
+          type="password"
+          placeholder="Senha"
+          className="border p-2 rounded"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+        />
+
+        <p className="text-xs text-gray-500 italic">
+          * A barbearia será criada com horário padrão (Seg-Sáb). O proprietário
+          poderá alterar no painel dele.
+        </p>
 
         <button
           type="submit"
           disabled={loading}
-          className="bg-green-600 text-white p-2 rounded font-bold hover:bg-green-700 disabled:bg-gray-400 transition-colors"
+          className="bg-green-600 text-white p-2 rounded font-bold hover:bg-green-700 disabled:bg-gray-400"
         >
-          {loading ? "Salvando..." : "Salvar Barbearia"}
+          {loading ? "Salvando..." : "Criar Conta"}
         </button>
       </div>
     </form>
