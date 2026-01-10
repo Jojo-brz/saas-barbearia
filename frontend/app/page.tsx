@@ -39,7 +39,7 @@ export default async function Home() {
           </Link>
           {/* Botão agora leva para contato, não para cadastro */}
           <Link
-            href="https://wa.me/5500000000000" // Coloque seu WhatsApp aqui
+            href="https://wa.me/5553999078299" // Coloque seu WhatsApp aqui
             className="bg-green-600 text-white px-6 py-2 rounded-full font-bold hover:bg-green-700 transition-all"
           >
             Contratar Sistema
@@ -59,7 +59,7 @@ export default async function Home() {
         </p>
         <div className="flex justify-center gap-4">
           <Link
-            href="https://wa.me/5500000000000" // Seu WhatsApp
+            href="https://wa.me/5553999078299" // Seu WhatsApp
             className="bg-blue-600 text-white px-8 py-4 rounded-lg font-bold text-lg hover:bg-blue-700 shadow-lg hover:shadow-xl transition-all"
           >
             Falar com Consultor
@@ -101,12 +101,6 @@ export default async function Home() {
         <p className="opacity-50">
           © 2025 BarberSaaS - Todos os direitos reservados
         </p>
-        <Link
-          href="/super-admin"
-          className="text-xs text-gray-700 hover:text-gray-500 mt-4 block"
-        >
-          Acesso Restrito
-        </Link>
       </footer>
     </div>
   );

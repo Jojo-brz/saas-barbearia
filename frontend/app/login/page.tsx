@@ -1,71 +1,87 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
+    setLoading(true);
+    const formData = new FormData();
+    formData.append("username", email);
+    formData.append("password", password);
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/login", {
+      const res = await fetch("http://127.0.0.1:8000/token", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: formData,
       });
-
       if (res.ok) {
         const data = await res.json();
-        // SUCESSO! Redireciona para o painel dele
-        router.push(`/admin/${data.slug}`);
+        localStorage.setItem("barber_token", data.access_token);
+        localStorage.setItem("barber_slug", data.slug);
+        localStorage.setItem("barber_role", data.role);
+
+        if (data.role === "admin") router.push("/super-admin");
+        else router.push(`/admin/${data.slug}`);
       } else {
-        // ERRO (Senha errada ou Bloqueado)
-        const errData = await res.json();
-        setError(errData.detail || "Erro ao entrar");
+        alert("Dados incorretos.");
       }
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    } catch (err) {
-      setError("Erro de conexão");
+    } catch {
+      alert("Erro de conexão.");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-blue-900">
-      <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-sm">
-        <h1 className="text-2xl font-bold text-gray-800 mb-6 text-center">
-          Login Barbeiro
+    <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
+      <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-md">
+        <h1 className="text-2xl font-bold text-center mb-6 text-gray-800">
+          Acesso ao Painel 🔐
         </h1>
-
-        {error && (
-          <div className="bg-red-100 text-red-700 p-3 rounded mb-4 text-sm text-center">
-            {error}
+        <form onSubmit={handleLogin} className="space-y-4">
+          <div>
+            <label className="block text-sm font-bold text-gray-700">
+              E-mail
+            </label>
+            <input
+              required
+              type="email"
+              className="w-full border p-2 rounded text-black"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
           </div>
-        )}
-
-        <form onSubmit={handleLogin} className="flex flex-col gap-4">
-          <input
-            type="email"
-            placeholder="Seu E-mail"
-            className="border p-3 rounded text-black"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
-          <input
-            type="password"
-            placeholder="Sua Senha"
-            className="border p-3 rounded text-black"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          <button className="bg-blue-600 text-white p-3 rounded font-bold hover:bg-blue-700">
-            Entrar no Sistema
+          <div>
+            <label className="block text-sm font-bold text-gray-700">
+              Senha
+            </label>
+            <input
+              required
+              type="password"
+              className="w-full border p-2 rounded text-black"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+          <button
+            disabled={loading}
+            className="w-full bg-blue-900 text-white font-bold py-3 rounded hover:bg-blue-800"
+          >
+            {loading ? "..." : "Entrar"}
           </button>
         </form>
+        <p className="text-center mt-6 text-xs text-gray-400">
+          <Link href="/" className="hover:underline">
+            ← Voltar para Início
+          </Link>
+        </p>
       </div>
     </div>
   );

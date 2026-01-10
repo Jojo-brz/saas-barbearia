@@ -1,28 +1,28 @@
 import Link from "next/link";
 import ServiceList from "../../src/components/ServerLIst";
 
-// Tipos
 interface Service {
   id: number;
   name: string;
   price: number;
   duration: number;
+  image_url?: string;
 }
-
+interface Barber {
+  id: number;
+  name: string;
+  photo_url?: string;
+}
 interface Barbershop {
   id: number;
   name: string;
   slug: string;
   address?: string;
-  hours_config: string; // JSON String
+  hours_config: string;
   logo_url?: string;
 }
-
-// Estrutura do JSON de Horários
 type DayConfig = { open: string; close: string; active: boolean };
 type WeekConfig = Record<string, DayConfig>;
-
-// Tradução para exibir na tela
 const DAYS_TRANSLATION: Record<string, string> = {
   monday: "Segunda",
   tuesday: "Terça",
@@ -32,7 +32,6 @@ const DAYS_TRANSLATION: Record<string, string> = {
   saturday: "Sábado",
   sunday: "Domingo",
 };
-// Ordem correta para exibição
 const DAYS_ORDER = [
   "monday",
   "tuesday",
@@ -43,7 +42,6 @@ const DAYS_ORDER = [
   "sunday",
 ];
 
-// Funções de Busca
 async function getBarbershop(slug: string): Promise<Barbershop | null> {
   const res = await fetch(`http://127.0.0.1:8000/barbershops/${slug}`, {
     cache: "no-store",
@@ -51,12 +49,18 @@ async function getBarbershop(slug: string): Promise<Barbershop | null> {
   if (!res.ok) return null;
   return res.json();
 }
-
 async function getServices(slug: string): Promise<Service[]> {
   const res = await fetch(
     `http://127.0.0.1:8000/barbershops/${slug}/services`,
     { cache: "no-store" }
   );
+  if (!res.ok) return [];
+  return res.json();
+}
+async function getBarbers(slug: string): Promise<Barber[]> {
+  const res = await fetch(`http://127.0.0.1:8000/barbershops/${slug}/barbers`, {
+    cache: "no-store",
+  });
   if (!res.ok) return [];
   return res.json();
 }
@@ -69,30 +73,22 @@ export default async function BarbershopPage({
   const { slug } = await params;
   const shop = await getBarbershop(slug);
   const services = await getServices(slug);
-
+  const barbers = await getBarbers(slug);
   if (!shop)
     return <div className="p-10 text-center">Barbearia não encontrada.</div>;
 
-  // Processa os horários (Parse do JSON)
   let hours: WeekConfig = {};
   try {
     hours = JSON.parse(shop.hours_config);
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  } catch (e) {
-    // Se der erro ou estiver vazio, ignora
-  }
-
-  // Pega o dia de hoje para destacar na lista
+  } catch {}
   const todayEnglish = new Date()
     .toLocaleDateString("en-US", { weekday: "long" })
     .toLowerCase();
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* HEADER COM LOGO E CAPA */}
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       <header className="bg-blue-900 text-white py-10 px-6 shadow-lg">
         <div className="max-w-3xl mx-auto flex flex-col items-center text-center">
-          {/* LOGO REDONDA */}
           <div className="w-24 h-24 bg-white rounded-full p-1 shadow-xl mb-4 overflow-hidden">
             {shop.logo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -107,7 +103,6 @@ export default async function BarbershopPage({
               </div>
             )}
           </div>
-
           <h1 className="text-3xl font-extrabold tracking-tight mb-2">
             {shop.name}
           </h1>
@@ -115,17 +110,15 @@ export default async function BarbershopPage({
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto p-6 -mt-8">
-        {/* --- CARD DE HORÁRIOS (NOVO!) --- */}
+      <main className="max-w-3xl mx-auto p-6 -mt-8 flex-1 w-full">
         <div className="bg-white rounded-xl shadow-md p-6 mb-8 border border-gray-100">
           <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2 border-b pb-2">
-            🕒 Horários de Atendimento
+            🕒 Horários
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm">
             {DAYS_ORDER.map((day) => {
               const config = hours[day];
               const isToday = day === todayEnglish;
-
               return (
                 <div
                   key={day}
@@ -150,14 +143,43 @@ export default async function BarbershopPage({
             })}
           </div>
         </div>
-
-        {/* --- LISTA DE SERVIÇOS --- */}
+        {barbers.length > 0 && (
+          <div className="mb-8">
+            <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+              👨‍💈 Nossa Equipe
+            </h2>
+            <div className="flex gap-4 overflow-x-auto pb-2">
+              {barbers.map((barber) => (
+                <div
+                  key={barber.id}
+                  className="flex flex-col items-center min-w-25"
+                >
+                  <div className="w-20 h-20 rounded-full bg-gray-200 mb-2 overflow-hidden border-2 border-blue-500 shadow-sm">
+                    {barber.photo_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={barber.photo_url}
+                        alt={barber.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-2xl">
+                        😎
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-sm font-bold text-gray-700">
+                    {barber.name}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         <h2 className="text-2xl font-bold text-gray-800 mb-6 border-b pb-2 flex items-center gap-2">
           ✂️ Escolha seu Serviço
         </h2>
-
         <ServiceList services={services} shop={shop} />
-
         <div className="mt-12 text-center pb-10">
           <Link
             href="/"
@@ -167,6 +189,15 @@ export default async function BarbershopPage({
           </Link>
         </div>
       </main>
+
+      {/* FOOTER COM LOGIN ESCONDIDO */}
+      <footer className="bg-gray-100 py-6 text-center text-gray-400 text-xs mt-auto">
+        <p>
+          &copy; {new Date().getFullYear()} {shop.name}. Todos os direitos
+          reservados.
+        </p>
+        <p className="mt-2">Sistema desenvolvido por BarberSaaS.</p>
+      </footer>
     </div>
   );
 }
