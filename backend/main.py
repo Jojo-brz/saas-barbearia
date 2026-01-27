@@ -23,6 +23,7 @@ from email.mime.multipart import MIMEMultipart
 from database import create_db_and_tables, get_session, engine
 from models import Barbershop, BookingBase, Service, ServiceCreate, Booking, BookingCreate, Barber, CashEntry, CashEntryCreate, SuperAdmin
 
+# 1. CARREGAR VARIÁVEIS DE AMBIENTE
 load_dotenv()
 
 SECRET_KEY = os.getenv("SECRET_KEY", "chave_fallback_insegura")
@@ -31,7 +32,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 1440
 MAIL_USERNAME = os.getenv("MAIL_USERNAME")
 MAIL_PASSWORD = os.getenv("MAIL_PASSWORD")
 
-# Configs de Segurança
+# 2. CONFIGURAÇÃO DE SEGURANÇA
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
@@ -48,6 +49,13 @@ def create_access_token(data: dict, role: str, expires_delta: Optional[timedelta
     to_encode.update({"exp": expire, "role": role})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
+
+# --- MODELO PARA ATUALIZAÇÃO PELO ADMIN (NOVO) ---
+class ShopUpdateAdmin(BaseModel):
+    name: Optional[str] = None
+    slug: Optional[str] = None
+    email: Optional[str] = None
+    password: Optional[str] = None
 
 # --- STARTUP AUTOMÁTICO DO SUPER ADMIN ---
 @asynccontextmanager
@@ -129,7 +137,7 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 
     raise HTTPException(400, "Usuário não encontrado")
 
-# --- SUPER ADMIN (PROTEGIDO) ---
+# --- ROTAS DO SUPER ADMIN (PROTEGIDAS) ---
 
 @app.post("/barbershops/", response_model=Barbershop)
 def create_barbershop(barbershop: Barbershop, session: Session = Depends(get_session), admin: SuperAdmin = Depends(get_current_super_admin)):
@@ -166,7 +174,34 @@ def delete_shop(id: int, admin: SuperAdmin = Depends(get_current_super_admin), s
     session.commit()
     return {"ok": True}
 
-# --- ROTAS PÚBLICAS ---
+# NOVA ROTA DE ATUALIZAÇÃO (PUT)
+@app.put("/admin/barbershops/{shop_id}")
+def update_barbershop_admin(shop_id: int, data: ShopUpdateAdmin, session: Session = Depends(get_session), admin: SuperAdmin = Depends(get_current_super_admin)):
+    shop = session.get(Barbershop, shop_id)
+    if not shop: raise HTTPException(404, "Barbearia não encontrada")
+
+    if data.name: shop.name = data.name
+    
+    if data.slug:
+        # Verifica duplicidade excluindo a própria loja
+        existing = session.exec(select(Barbershop).where(Barbershop.slug == data.slug).where(Barbershop.id != shop_id)).first()
+        if existing: raise HTTPException(400, "Slug já em uso")
+        shop.slug = data.slug.lower().replace(" ", "-")
+        
+    if data.email:
+        existing = session.exec(select(Barbershop).where(Barbershop.email == data.email).where(Barbershop.id != shop_id)).first()
+        if existing: raise HTTPException(400, "Email já em uso")
+        shop.email = data.email
+        
+    if data.password:
+        shop.password = get_password_hash(data.password)
+
+    session.add(shop)
+    session.commit()
+    session.refresh(shop)
+    return shop
+
+# --- ROTAS PÚBLICAS (Home e Agendamento) ---
 
 @app.get("/barbershops/", response_model=list[Barbershop])
 def read_barbershops_public(session: Session = Depends(get_session)):
@@ -226,7 +261,7 @@ def create_booking(data: BookingCreate, session: Session = Depends(get_session))
     session.refresh(booking)
     return booking
 
-# --- ROTAS PROTEGIDAS DA BARBEARIA ---
+# --- ROTAS PROTEGIDAS DA BARBEARIA (PAINEL CLIENTE) ---
 
 @app.post("/upload/")
 async def upload_file(file: UploadFile = File(...), current_shop: Barbershop = Depends(get_current_shop)):
@@ -330,7 +365,115 @@ def update_logo(shop_id: int, data: LogoUpdate, session: Session = Depends(get_s
 
 @app.post("/barbershops/{slug_url}/send_report")
 def send_daily_report(slug_url: str, session: Session = Depends(get_session), current_shop: Barbershop = Depends(get_current_shop)):
-    if current_shop.slug != slug_url: raise HTTPException(403)
-    today_str = date.today().isoformat()
-    # (Lógica simplificada - implemente o envio real com smtplib se quiser)
-    return {"status": "Relatório enviado!"}
+    # 1. Segurança: Só a própria loja pode enviar seu relatório
+    if current_shop.slug != slug_url: 
+        raise HTTPException(403, "Acesso negado")
+
+    # 2. Configurações de Data
+    today = date.today()
+    today_str = today.isoformat() # YYYY-MM-DD para filtrar no banco
+    today_br = today.strftime("%d/%m/%Y") # DD/MM/AAAA para mostrar no email
+
+    # 3. Calcular Agendamentos do Dia
+    daily_bookings = []
+    total_bookings = 0.0
+    
+    for b in current_shop.bookings:
+        # A data vem como "2023-10-25T14:30", pegamos o começo
+        if b.date_time.startswith(today_str):
+            service = session.get(Service, b.service_id)
+            # Verifica se o serviço ainda existe
+            svc_name = service.name if service else "Serviço Excluído"
+            svc_price = service.price if service else 0.0
+            
+            daily_bookings.append({
+                "time": b.date_time.split("T")[1],
+                "client": b.customer_name,
+                "service": svc_name,
+                "val": svc_price
+            })
+            total_bookings += svc_price
+
+    # 4. Calcular Caixa Avulso do Dia
+    daily_cash = []
+    total_cash = 0.0
+    
+    for c in current_shop.cash_entries:
+        if c.date == today_str:
+            daily_cash.append({
+                "desc": c.description,
+                "val": c.value
+            })
+            total_cash += c.value
+
+    total_day = total_bookings + total_cash
+
+    # 5. Montar o HTML do E-mail
+    def fmt(v): return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+    html_content = f"""
+    <html>
+      <body style="font-family: sans-serif; color: #333;">
+        <div style="max-width: 600px; margin: 0 auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
+            <div style="background-color: #000; color: white; padding: 20px; text-align: center;">
+                <h1 style="margin:0;">Resumo do Dia 💰</h1>
+                <p style="margin:5px 0 0;">{current_shop.name} - {today_br}</p>
+            </div>
+            
+            <div style="padding: 20px;">
+                <h2 style="color: #166534; text-align: center; font-size: 28px; margin-bottom: 20px;">
+                    {fmt(total_day)}
+                </h2>
+                
+                <h3 style="border-bottom: 2px solid #eee; padding-bottom: 5px;">📅 Agendamentos ({len(daily_bookings)})</h3>
+                <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                    <tr style="background-color: #f9fafb; text-align: left;">
+                        <th style="padding: 8px;">Hora</th>
+                        <th style="padding: 8px;">Cliente</th>
+                        <th style="padding: 8px;">Serviço</th>
+                        <th style="padding: 8px; text-align: right;">Valor</th>
+                    </tr>
+                    {''.join([f'<tr><td style="padding:8px; border-bottom:1px solid #eee;">{b["time"]}</td><td style="padding:8px; border-bottom:1px solid #eee;">{b["client"]}</td><td style="padding:8px; border-bottom:1px solid #eee;">{b["service"]}</td><td style="padding:8px; border-bottom:1px solid #eee; text-align: right;">{fmt(b["val"])}</td></tr>' for b in daily_bookings])}
+                </table>
+                
+                <br>
+
+                <h3 style="border-bottom: 2px solid #eee; padding-bottom: 5px;">💵 Entradas Avulsas ({len(daily_cash)})</h3>
+                <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                    {''.join([f'<tr><td style="padding:8px; border-bottom:1px solid #eee;">{c["desc"]}</td><td style="padding:8px; border-bottom:1px solid #eee; text-align: right;">{fmt(c["val"])}</td></tr>' for c in daily_cash])}
+                </table>
+            </div>
+            
+            <div style="background-color: #f3f4f6; padding: 15px; text-align: center; font-size: 12px; color: #888;">
+                Enviado automaticamente pelo sistema <b>BarberSaaS</b> 💈
+            </div>
+        </div>
+      </body>
+    </html>
+    """
+
+    # 6. Enviar E-mail (SMTP)
+    try:
+        if not MAIL_USERNAME or not MAIL_PASSWORD:
+            print("⚠️ Erro: Credenciais de e-mail não configuradas no .env")
+            return {"status": "Erro: Email não configurado no servidor."}
+
+        msg = MIMEMultipart()
+        msg['From'] = f"BarberSaaS <{MAIL_USERNAME}>"
+        msg['To'] = current_shop.email # Envia para o email da barbearia
+        msg['Subject'] = f"Fechamento de Caixa - {today_br}"
+        msg.attach(MIMEText(html_content, 'html'))
+
+        # Conexão com Gmail
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(MAIL_USERNAME, MAIL_PASSWORD)
+        server.sendmail(MAIL_USERNAME, current_shop.email, msg.as_string())
+        server.quit()
+        
+        return {"status": "Relatório enviado com sucesso!"}
+        
+    except Exception as e:
+        print(f"Erro ao enviar email: {e}")
+        # Não travamos o frontend se o email falhar, mas logamos o erro
+        raise HTTPException(500, f"Falha no envio: {str(e)}")

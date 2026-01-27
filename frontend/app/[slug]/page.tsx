@@ -52,7 +52,7 @@ async function getBarbershop(slug: string): Promise<Barbershop | null> {
 async function getServices(slug: string): Promise<Service[]> {
   const res = await fetch(
     `http://127.0.0.1:8000/barbershops/${slug}/services`,
-    { cache: "no-store" }
+    { cache: "no-store" },
   );
   if (!res.ok) return [];
   return res.json();
@@ -86,10 +86,11 @@ export default async function BarbershopPage({
     .toLowerCase();
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <header className="bg-blue-900 text-white py-10 px-6 shadow-lg">
+    <div className="min-h-screen bg-zinc-50 flex flex-col font-sans">
+      {/* HEADER PRETO/ZINC */}
+      <header className="bg-zinc-950 text-white py-12 px-6 shadow-xl border-b border-zinc-800">
         <div className="max-w-3xl mx-auto flex flex-col items-center text-center">
-          <div className="w-24 h-24 bg-white rounded-full p-1 shadow-xl mb-4 overflow-hidden">
+          <div className="w-24 h-24 bg-white rounded-full p-1 shadow-2xl mb-4 overflow-hidden border-4 border-zinc-800">
             {shop.logo_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -98,21 +99,24 @@ export default async function BarbershopPage({
                 className="w-full h-full object-cover rounded-full"
               />
             ) : (
-              <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-500 text-3xl font-bold">
+              <div className="w-full h-full bg-zinc-200 flex items-center justify-center text-zinc-500 text-3xl font-bold">
                 {shop.name.charAt(0)}
               </div>
             )}
           </div>
-          <h1 className="text-3xl font-extrabold tracking-tight mb-2">
+          <h1 className="text-3xl font-black tracking-tight mb-2 uppercase">
             {shop.name}
           </h1>
-          {shop.address && <p className="text-blue-200">📍 {shop.address}</p>}
+          {shop.address && (
+            <p className="text-zinc-400 font-medium">📍 {shop.address}</p>
+          )}
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto p-6 -mt-8 flex-1 w-full">
-        <div className="bg-white rounded-xl shadow-md p-6 mb-8 border border-gray-100">
-          <h2 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2 border-b pb-2">
+      <main className="max-w-3xl mx-auto p-6 -mt-8 flex-1 w-full z-10 relative">
+        {/* HORÁRIOS */}
+        <div className="bg-white rounded-xl shadow-lg p-6 mb-8 border border-zinc-100">
+          <h2 className="text-lg font-black text-zinc-900 mb-4 flex items-center gap-2 border-b border-zinc-100 pb-2 uppercase tracking-wide">
             🕒 Horários
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2 text-sm">
@@ -122,11 +126,7 @@ export default async function BarbershopPage({
               return (
                 <div
                   key={day}
-                  className={`flex justify-between items-center py-1 px-2 rounded ${
-                    isToday
-                      ? "bg-blue-50 font-bold text-blue-800"
-                      : "text-gray-600"
-                  }`}
+                  className={`flex justify-between items-center py-1 px-2 rounded ${isToday ? "bg-zinc-900 text-white font-bold" : "text-zinc-500"}`}
                 >
                   <span>{DAYS_TRANSLATION[day]}</span>
                   <span>
@@ -143,18 +143,20 @@ export default async function BarbershopPage({
             })}
           </div>
         </div>
+
+        {/* EQUIPE */}
         {barbers.length > 0 && (
           <div className="mb-8">
-            <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+            <h2 className="text-xl font-black text-zinc-900 mb-4 flex items-center gap-2 uppercase tracking-wide">
               👨‍💈 Nossa Equipe
             </h2>
-            <div className="flex gap-4 overflow-x-auto pb-2">
+            <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
               {barbers.map((barber) => (
                 <div
                   key={barber.id}
                   className="flex flex-col items-center min-w-25"
                 >
-                  <div className="w-20 h-20 rounded-full bg-gray-200 mb-2 overflow-hidden border-2 border-blue-500 shadow-sm">
+                  <div className="w-20 h-20 rounded-full bg-zinc-200 mb-2 overflow-hidden border-2 border-zinc-900 shadow-md">
                     {barber.photo_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -168,7 +170,7 @@ export default async function BarbershopPage({
                       </div>
                     )}
                   </div>
-                  <span className="text-sm font-bold text-gray-700">
+                  <span className="text-sm font-bold text-zinc-800">
                     {barber.name}
                   </span>
                 </div>
@@ -176,27 +178,38 @@ export default async function BarbershopPage({
             </div>
           </div>
         )}
-        <h2 className="text-2xl font-bold text-gray-800 mb-6 border-b pb-2 flex items-center gap-2">
+
+        {/* LISTA DE SERVIÇOS */}
+        <h2 className="text-2xl font-black text-zinc-900 mb-6 border-b border-zinc-200 pb-2 flex items-center gap-2 uppercase tracking-tight">
           ✂️ Escolha seu Serviço
         </h2>
         <ServiceList services={services} shop={shop} />
+
         <div className="mt-12 text-center pb-10">
           <Link
             href="/"
-            className="text-gray-400 hover:text-blue-600 text-sm font-bold transition-colors"
+            className="text-zinc-400 hover:text-black text-sm font-bold transition-colors"
           >
             ← Voltar para Início
           </Link>
         </div>
       </main>
 
-      {/* FOOTER COM LOGIN ESCONDIDO */}
-      <footer className="bg-gray-100 py-6 text-center text-gray-400 text-xs mt-auto">
-        <p>
-          &copy; {new Date().getFullYear()} {shop.name}. Todos os direitos
-          reservados.
+      <footer className="bg-white py-8 text-center text-zinc-400 text-xs mt-auto border-t border-zinc-100">
+        <p className="font-medium">
+          &copy; {new Date().getFullYear()} {shop.name}
         </p>
-        <p className="mt-2">Sistema desenvolvido por BarberSaaS.</p>
+        <p className="mt-2">
+          Sistema desenvolvido por{" "}
+          <span className="text-zinc-900 font-bold">BarberSaaS</span>.
+        </p>
+        <Link
+          href="/login"
+          className="inline-block mt-4 opacity-20 hover:opacity-100 transition-opacity grayscale hover:grayscale-0"
+          title="Acesso Restrito"
+        >
+          🔒
+        </Link>
       </footer>
     </div>
   );
