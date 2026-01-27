@@ -1,8 +1,8 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import toast from "react-hot-toast";
+import { Logo } from "../../src/components/logo";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -27,68 +27,60 @@ export default function LoginPage() {
         localStorage.setItem("barber_token", data.access_token);
         localStorage.setItem("barber_slug", data.slug);
         localStorage.setItem("barber_role", data.role);
-
-        toast.success("Login realizado com sucesso! 🔓"); // <--- TOAST SUCESSO
-
-        // Pequeno delay para o usuário ler a mensagem antes de redirecionar
+        toast.success("Login realizado com sucesso!");
         setTimeout(() => {
           if (data.role === "admin") router.push("/super-admin");
           else router.push(`/admin/${data.slug}`);
         }, 1000);
       } else {
-        toast.error("E-mail ou senha incorretos."); // <--- TOAST ERRO
+        toast.error("E-mail ou senha incorretos.");
       }
     } catch {
-      toast.error("Erro ao conectar com o servidor."); // <--- TOAST ERRO
+      toast.error("Erro ao conectar com o servidor.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    // ... (Mantenha o resto do JSX igual, o return não muda)
-    <div className="min-h-screen flex items-center justify-center bg-zinc-100 p-4">
-      <div className="bg-white p-8 rounded-xl shadow-2xl w-full max-w-md border border-zinc-200">
-        <h1 className="text-2xl font-black text-center mb-6 text-zinc-900 uppercase tracking-tight">
-          Acesso ao Painel 🔐
-        </h1>
-        <form onSubmit={handleLogin} className="space-y-5">
+    <div className="min-h-screen flex items-center justify-center bg-zinc-50 p-4">
+      <div className="bg-white p-6 md:p-10 rounded-2xl shadow-xl w-full max-w-sm border border-zinc-200">
+        <div className="flex justify-center mb-8">
+          <Logo className="w-40 h-auto" color="#18181b" />
+        </div>
+
+        <form onSubmit={handleLogin} className="space-y-4">
           <div>
-            <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">
+            <label className="block text-[10px] font-black text-zinc-400 uppercase mb-1 tracking-wider">
               E-mail
             </label>
             <input
               required
               type="email"
-              className="w-full border border-zinc-300 p-3 rounded text-black focus:border-black outline-none transition-colors"
+              className="w-full bg-zinc-50 border border-zinc-200 p-3 rounded-xl text-zinc-900 focus:border-zinc-900 focus:bg-white outline-none transition-all font-medium"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
           </div>
           <div>
-            <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">
+            <label className="block text-[10px] font-black text-zinc-400 uppercase mb-1 tracking-wider">
               Senha
             </label>
             <input
               required
               type="password"
-              className="w-full border border-zinc-300 p-3 rounded text-black focus:border-black outline-none transition-colors"
+              className="w-full bg-zinc-50 border border-zinc-200 p-3 rounded-xl text-zinc-900 focus:border-zinc-900 focus:bg-white outline-none transition-all font-medium"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
           <button
             disabled={loading}
-            className="w-full bg-zinc-900 text-white font-bold py-3 rounded hover:bg-black transition-colors uppercase tracking-wide text-sm"
+            className="w-full bg-zinc-900 text-white font-black py-4 rounded-xl hover:bg-black transition-transform active:scale-95 uppercase tracking-wide text-xs shadow-lg mt-4"
           >
             {loading ? "Entrando..." : "Acessar Painel"}
           </button>
         </form>
-        <p className="text-center mt-8 text-xs text-zinc-400 font-medium">
-          <Link href="/" className="hover:text-black transition-colors">
-            ← Voltar para Início
-          </Link>
-        </p>
       </div>
     </div>
   );

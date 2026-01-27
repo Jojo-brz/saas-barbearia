@@ -241,6 +241,7 @@ def read_barbers(slug_url: str, session: Session = Depends(get_session)):
     if not shop: raise HTTPException(404)
     return shop.barbers
 
+# Rota Atualizada para fornecer dados completos ao Frontend
 @app.get("/barbershops/{slug_url}/bookings", response_model=List[dict])
 def read_bookings(slug_url: str, session: Session = Depends(get_session)):
     shop = session.exec(select(Barbershop).where(Barbershop.slug == slug_url)).first()
@@ -249,17 +250,17 @@ def read_bookings(slug_url: str, session: Session = Depends(get_session)):
     for b in shop.bookings:
         service = session.get(Service, b.service_id)
         duration = service.duration if service else 30
+        
+        # Estrutura completa para o React não reclamar
         results.append({
-            "id": b.id,                       
+            "id": b.id,
             "customer_name": b.customer_name,
             "customer_phone": b.customer_phone,
             "date_time": b.date_time,
-            "service_id": b.service_id, 
+            "service_id": b.service_id,
             "service_duration": duration,
             "barber_id": b.barber_id
         })
-        # ---------------------
-        
     return results
 
 @app.post("/bookings/", response_model=Booking)
@@ -331,7 +332,6 @@ def update_service(service_id: int, data: ServiceUpdate, session: Session = Depe
     session.commit()
     return service
 
-# CORRIGIDO: Agora usa BarberInput em vez de BaseModel genérico
 @app.post("/barbers/", response_model=Barber)
 def create_barber(data: BarberInput, session: Session = Depends(get_session), current_shop: Barbershop = Depends(get_current_shop)):
     if data.barbershop_id != current_shop.id: raise HTTPException(403)
@@ -349,6 +349,7 @@ def delete_barber(barber_id: int, session: Session = Depends(get_session), curre
     session.commit()
     return {"ok": True}
 
+# ROTA PARA CANCELAR AGENDAMENTO
 @app.delete("/bookings/{booking_id}")
 def delete_booking(booking_id: int, session: Session = Depends(get_session), current_shop: Barbershop = Depends(get_current_shop)):
     booking = session.get(Booking, booking_id)
@@ -366,6 +367,7 @@ def create_cash_entry(data: CashEntryCreate, session: Session = Depends(get_sess
     session.refresh(entry)
     return entry
 
+# ROTA PARA CANCELAR CAIXA AVULSO
 @app.delete("/cash_entries/{entry_id}")
 def delete_cash_entry(entry_id: int, session: Session = Depends(get_session), current_shop: Barbershop = Depends(get_current_shop)):
     entry = session.get(CashEntry, entry_id)
@@ -394,16 +396,13 @@ def update_logo(shop_id: int, data: LogoUpdate, session: Session = Depends(get_s
 
 @app.post("/barbershops/{slug_url}/send_report")
 def send_daily_report(slug_url: str, session: Session = Depends(get_session), current_shop: Barbershop = Depends(get_current_shop)):
-    # 1. Segurança
     if current_shop.slug != slug_url: 
         raise HTTPException(403, "Acesso negado")
 
-    # 2. Configurações de Data
     today = date.today()
     today_str = today.isoformat()
     today_br = today.strftime("%d/%m/%Y")
 
-    # 3. Calcular Agendamentos do Dia
     daily_bookings = []
     total_bookings = 0.0
     
@@ -421,7 +420,6 @@ def send_daily_report(slug_url: str, session: Session = Depends(get_session), cu
             })
             total_bookings += svc_price
 
-    # 4. Calcular Caixa Avulso do Dia
     daily_cash = []
     total_cash = 0.0
     
@@ -435,7 +433,6 @@ def send_daily_report(slug_url: str, session: Session = Depends(get_session), cu
 
     total_day = total_bookings + total_cash
 
-    # 5. HTML do E-mail
     def fmt(v): return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
     html_content = f"""
@@ -479,7 +476,6 @@ def send_daily_report(slug_url: str, session: Session = Depends(get_session), cu
     </html>
     """
 
-    # 6. Enviar E-mail
     try:
         if not MAIL_USERNAME or not MAIL_PASSWORD:
             print("⚠️ Erro: Credenciais de e-mail não configuradas no .env")
