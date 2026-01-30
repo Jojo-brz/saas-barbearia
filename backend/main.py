@@ -3,17 +3,17 @@ import shutil
 import os
 import uuid
 import smtplib
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime, timedelta, date
 from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 from pydantic import BaseModel
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, status
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, status, Header
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from sqlmodel import Session, select
+from sqlmodel import Session, select, delete # Adicionado 'delete'
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from email.mime.text import MIMEText
@@ -23,6 +23,7 @@ from email.mime.multipart import MIMEMultipart
 from database import create_db_and_tables, get_session, engine
 from models import Barbershop, BookingBase, Service, ServiceCreate, Booking, BookingCreate, Barber, CashEntry, CashEntryCreate, SuperAdmin
 
+# 1. CARREGAR VARIÁVEIS DE AMBIENTE
 load_dotenv()
 
 SECRET_KEY = os.getenv("SECRET_KEY", "chave_fallback_insegura")
@@ -31,7 +32,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 1440
 MAIL_USERNAME = os.getenv("MAIL_USERNAME")
 MAIL_PASSWORD = os.getenv("MAIL_PASSWORD")
 
-# Configs de Segurança
+# 2. CONFIGURAÇÃO DE SEGURANÇA
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
@@ -48,6 +49,31 @@ def create_access_token(data: dict, role: str, expires_delta: Optional[timedelta
     to_encode.update({"exp": expire, "role": role})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
+
+# --- MODELOS DE ENTRADA (PYDANTIC) ---
+
+class ShopUpdateAdmin(BaseModel):
+    name: Optional[str] = None
+    slug: Optional[str] = None
+    email: Optional[str] = None
+    password: Optional[str] = None
+
+class BarberInput(BaseModel):
+    name: str
+    photo_url: Optional[str] = None
+    barbershop_id: int
+
+class ServiceUpdate(BaseModel):
+    name: Optional[str] = None
+    price: Optional[float] = None
+    duration: Optional[int] = None
+    image_url: Optional[str] = None
+
+class HoursUpdate(BaseModel):
+    hours_config: str
+
+class LogoUpdate(BaseModel):
+    logo_url: str
 
 # --- STARTUP AUTOMÁTICO DO SUPER ADMIN ---
 @asynccontextmanager
@@ -76,7 +102,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-origins = ["http://localhost:3000"]
+origins = ["http://localhost:3000", "https://barber-api.onrender.com"] # Ajuste conforme necessário
 app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 os.makedirs("uploads", exist_ok=True)
@@ -108,6 +134,36 @@ async def get_current_super_admin(token: str = Depends(oauth2_scheme), session: 
     if admin is None: raise HTTPException(status_code=401, detail="Admin não encontrado")
     return admin
 
+@app.get("/")
+def home():
+    return {"message": "API BarberSaaS está Online! 🚀 Acesse /docs para ver a documentação."}
+
+# --- ROTA DE LIMPEZA DIÁRIA (NOVO) ---
+@app.delete("/cleanup/")
+def cleanup_old_data(key: str, session: Session = Depends(get_session)):
+    """
+    Limpa agendamentos e entradas de caixa ANTERIORES a hoje.
+    Protegido por uma chave secreta na URL (key).
+    """
+    # Verifica se a chave passada na URL é a mesma do .env
+    if key != SECRET_KEY:
+        raise HTTPException(status_code=403, detail="Chave de limpeza inválida")
+    
+    today_str = date.today().isoformat() # Ex: "2024-02-15"
+    
+    # 1. Deletar Agendamentos Antigos (Data menor que hoje)
+    # A string de data ISO funciona bem com comparações de string (ex: "2024-01-01" < "2024-02-15")
+    statement_bookings = delete(Booking).where(Booking.date_time < today_str)
+    session.exec(statement_bookings)
+    
+    # 2. Deletar Caixa Antigo
+    statement_cash = delete(CashEntry).where(CashEntry.date < today_str)
+    session.exec(statement_cash)
+    
+    session.commit()
+    
+    return {"message": "Limpeza concluída! Dados anteriores a hoje foram removidos."}
+
 # --- LOGIN UNIFICADO ---
 
 @app.post("/token")
@@ -129,7 +185,7 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 
     raise HTTPException(400, "Usuário não encontrado")
 
-# --- SUPER ADMIN (PROTEGIDO) ---
+# --- ROTAS DO SUPER ADMIN (PROTEGIDAS) ---
 
 @app.post("/barbershops/", response_model=Barbershop)
 def create_barbershop(barbershop: Barbershop, session: Session = Depends(get_session), admin: SuperAdmin = Depends(get_current_super_admin)):
@@ -141,7 +197,7 @@ def create_barbershop(barbershop: Barbershop, session: Session = Depends(get_ses
     session.refresh(barbershop)
     return barbershop
 
-@app.get("/admin/shops", response_model=list[Barbershop])
+@app.get("/admin/shops", response_model=List[Barbershop])
 def list_all_shops(admin: SuperAdmin = Depends(get_current_super_admin), session: Session = Depends(get_session)):
     return session.exec(select(Barbershop)).all()
 
@@ -166,9 +222,34 @@ def delete_shop(id: int, admin: SuperAdmin = Depends(get_current_super_admin), s
     session.commit()
     return {"ok": True}
 
-# --- ROTAS PÚBLICAS ---
+@app.put("/admin/barbershops/{shop_id}")
+def update_barbershop_admin(shop_id: int, data: ShopUpdateAdmin, session: Session = Depends(get_session), admin: SuperAdmin = Depends(get_current_super_admin)):
+    shop = session.get(Barbershop, shop_id)
+    if not shop: raise HTTPException(404, "Barbearia não encontrada")
 
-@app.get("/barbershops/", response_model=list[Barbershop])
+    if data.name: shop.name = data.name
+    
+    if data.slug:
+        existing = session.exec(select(Barbershop).where(Barbershop.slug == data.slug).where(Barbershop.id != shop_id)).first()
+        if existing: raise HTTPException(400, "Slug já em uso")
+        shop.slug = data.slug.lower().replace(" ", "-")
+        
+    if data.email:
+        existing = session.exec(select(Barbershop).where(Barbershop.email == data.email).where(Barbershop.id != shop_id)).first()
+        if existing: raise HTTPException(400, "Email já em uso")
+        shop.email = data.email
+        
+    if data.password:
+        shop.password = get_password_hash(data.password)
+
+    session.add(shop)
+    session.commit()
+    session.refresh(shop)
+    return shop
+
+# --- ROTAS PÚBLICAS (Home e Agendamento) ---
+
+@app.get("/barbershops/", response_model=List[Barbershop])
 def read_barbershops_public(session: Session = Depends(get_session)):
     return session.exec(select(Barbershop).where(Barbershop.is_active == True)).all()
 
@@ -178,19 +259,19 @@ def read_barbershop(slug_url: str, session: Session = Depends(get_session)):
     if not shop: raise HTTPException(404)
     return shop
 
-@app.get("/barbershops/{slug_url}/services", response_model=list[Service])
+@app.get("/barbershops/{slug_url}/services", response_model=List[Service])
 def read_services(slug_url: str, session: Session = Depends(get_session)):
     shop = session.exec(select(Barbershop).where(Barbershop.slug == slug_url)).first()
     if not shop: raise HTTPException(404)
     return shop.services
 
-@app.get("/barbershops/{slug_url}/barbers", response_model=list[Barber])
+@app.get("/barbershops/{slug_url}/barbers", response_model=List[Barber])
 def read_barbers(slug_url: str, session: Session = Depends(get_session)):
     shop = session.exec(select(Barbershop).where(Barbershop.slug == slug_url)).first()
     if not shop: raise HTTPException(404)
     return shop.barbers
 
-@app.get("/barbershops/{slug_url}/bookings", response_model=list[dict])
+@app.get("/barbershops/{slug_url}/bookings", response_model=List[dict])
 def read_bookings(slug_url: str, session: Session = Depends(get_session)):
     shop = session.exec(select(Barbershop).where(Barbershop.slug == slug_url)).first()
     if not shop: raise HTTPException(404)
@@ -198,7 +279,16 @@ def read_bookings(slug_url: str, session: Session = Depends(get_session)):
     for b in shop.bookings:
         service = session.get(Service, b.service_id)
         duration = service.duration if service else 30
-        results.append({"date_time": b.date_time, "service_duration": duration, "barber_id": b.barber_id})
+        
+        results.append({
+            "id": b.id,
+            "customer_name": b.customer_name,
+            "customer_phone": b.customer_phone,
+            "date_time": b.date_time,
+            "service_id": b.service_id,
+            "service_duration": duration,
+            "barber_id": b.barber_id
+        })
     return results
 
 @app.post("/bookings/", response_model=Booking)
@@ -215,10 +305,10 @@ def create_booking(data: BookingCreate, session: Session = Depends(get_session))
     except: config = {}
     day_config = config.get(day_name)
     
-    if not day_config or not day_config.get("active"): raise HTTPException(400, "Fechado")
-    if time_str < day_config["open"] or time_str >= day_config["close"]: raise HTTPException(400, "Fora do horário")
+    if not day_config or not day_config.get("active"): raise HTTPException(400, "Fechado neste dia")
+    if time_str < day_config["open"] or time_str >= day_config["close"]: raise HTTPException(400, "Fora do horário de funcionamento")
     if day_config.get("break_start") and day_config.get("break_end"):
-        if time_str >= day_config["break_start"] and time_str < day_config["break_end"]: raise HTTPException(400, "Intervalo")
+        if time_str >= day_config["break_start"] and time_str < day_config["break_end"]: raise HTTPException(400, "No horário de intervalo")
 
     booking = Booking.model_validate(data)
     session.add(booking)
@@ -226,7 +316,12 @@ def create_booking(data: BookingCreate, session: Session = Depends(get_session))
     session.refresh(booking)
     return booking
 
-# --- ROTAS PROTEGIDAS DA BARBEARIA ---
+@app.get("/barbershops/{slug_url}/cash_entries", response_model=List[CashEntry])
+def read_cash_entries(slug_url: str, session: Session = Depends(get_session), current_shop: Barbershop = Depends(get_current_shop)):
+    if current_shop.slug != slug_url: raise HTTPException(403)
+    return current_shop.cash_entries
+
+# --- ROTAS PROTEGIDAS DA BARBEARIA (PAINEL CLIENTE) ---
 
 @app.post("/upload/")
 async def upload_file(file: UploadFile = File(...), current_shop: Barbershop = Depends(get_current_shop)):
@@ -254,7 +349,6 @@ def delete_service(service_id: int, session: Session = Depends(get_session), cur
     return {"ok": True}
 
 @app.put("/services/{service_id}")
-class ServiceUpdate(BaseModel): name: Optional[str]=None; price: Optional[float]=None; duration: Optional[int]=None; image_url: Optional[str]=None
 def update_service(service_id: int, data: ServiceUpdate, session: Session = Depends(get_session), current_shop: Barbershop = Depends(get_current_shop)):
     service = session.get(Service, service_id)
     if not service or service.barbershop_id != current_shop.id: raise HTTPException(403)
@@ -267,11 +361,9 @@ def update_service(service_id: int, data: ServiceUpdate, session: Session = Depe
     return service
 
 @app.post("/barbers/", response_model=Barber)
-def create_barber(data: BaseModel, session: Session = Depends(get_session), current_shop: Barbershop = Depends(get_current_shop)):
-    class BarberCreate(BaseModel): name: str; photo_url: Optional[str]=None; barbershop_id: int
-    b_data = BarberCreate(**data.dict())
-    if b_data.barbershop_id != current_shop.id: raise HTTPException(403)
-    barber = Barber.model_validate(b_data)
+def create_barber(data: BarberInput, session: Session = Depends(get_session), current_shop: Barbershop = Depends(get_current_shop)):
+    if data.barbershop_id != current_shop.id: raise HTTPException(403)
+    barber = Barber.model_validate(data)
     session.add(barber)
     session.commit()
     session.refresh(barber)
@@ -310,7 +402,6 @@ def delete_cash_entry(entry_id: int, session: Session = Depends(get_session), cu
     session.commit()
     return {"ok": True}
 
-class HoursUpdate(BaseModel): hours_config: str
 @app.put("/barbershops/{shop_id}/hours")
 def update_hours(shop_id: int, data: HoursUpdate, session: Session = Depends(get_session), current_shop: Barbershop = Depends(get_current_shop)):
     if shop_id != current_shop.id: raise HTTPException(403)
@@ -319,7 +410,6 @@ def update_hours(shop_id: int, data: HoursUpdate, session: Session = Depends(get
     session.commit()
     return {"ok": True}
 
-class LogoUpdate(BaseModel): logo_url: str
 @app.put("/barbershops/{shop_id}/logo")
 def update_logo(shop_id: int, data: LogoUpdate, session: Session = Depends(get_session), current_shop: Barbershop = Depends(get_current_shop)):
     if shop_id != current_shop.id: raise HTTPException(403)
@@ -328,9 +418,109 @@ def update_logo(shop_id: int, data: LogoUpdate, session: Session = Depends(get_s
     session.commit()
     return {"ok": True}
 
+# --- ENVIO DE RELATÓRIO POR E-MAIL (REAL) ---
+
 @app.post("/barbershops/{slug_url}/send_report")
 def send_daily_report(slug_url: str, session: Session = Depends(get_session), current_shop: Barbershop = Depends(get_current_shop)):
-    if current_shop.slug != slug_url: raise HTTPException(403)
-    today_str = date.today().isoformat()
-    # (Lógica simplificada - implemente o envio real com smtplib se quiser)
-    return {"status": "Relatório enviado!"}
+    if current_shop.slug != slug_url: 
+        raise HTTPException(403, "Acesso negado")
+
+    today = date.today()
+    today_str = today.isoformat()
+    today_br = today.strftime("%d/%m/%Y")
+
+    daily_bookings = []
+    total_bookings = 0.0
+    
+    for b in current_shop.bookings:
+        if b.date_time.startswith(today_str):
+            service = session.get(Service, b.service_id)
+            svc_name = service.name if service else "Serviço Excluído"
+            svc_price = service.price if service else 0.0
+            
+            daily_bookings.append({
+                "time": b.date_time.split("T")[1],
+                "client": b.customer_name,
+                "service": svc_name,
+                "val": svc_price
+            })
+            total_bookings += svc_price
+
+    daily_cash = []
+    total_cash = 0.0
+    
+    for c in current_shop.cash_entries:
+        if c.date == today_str:
+            daily_cash.append({
+                "desc": c.description,
+                "val": c.value
+            })
+            total_cash += c.value
+
+    total_day = total_bookings + total_cash
+
+    def fmt(v): return f"R$ {v:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+    html_content = f"""
+    <html>
+      <body style="font-family: sans-serif; color: #333;">
+        <div style="max-width: 600px; margin: 0 auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
+            <div style="background-color: #000; color: white; padding: 20px; text-align: center;">
+                <h1 style="margin:0;">Resumo do Dia 💰</h1>
+                <p style="margin:5px 0 0;">{current_shop.name} - {today_br}</p>
+            </div>
+            
+            <div style="padding: 20px;">
+                <h2 style="color: #166534; text-align: center; font-size: 28px; margin-bottom: 20px;">
+                    {fmt(total_day)}
+                </h2>
+                
+                <h3 style="border-bottom: 2px solid #eee; padding-bottom: 5px;">📅 Agendamentos ({len(daily_bookings)})</h3>
+                <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                    <tr style="background-color: #f9fafb; text-align: left;">
+                        <th style="padding: 8px;">Hora</th>
+                        <th style="padding: 8px;">Cliente</th>
+                        <th style="padding: 8px;">Serviço</th>
+                        <th style="padding: 8px; text-align: right;">Valor</th>
+                    </tr>
+                    {''.join([f'<tr><td style="padding:8px; border-bottom:1px solid #eee;">{b["time"]}</td><td style="padding:8px; border-bottom:1px solid #eee;">{b["client"]}</td><td style="padding:8px; border-bottom:1px solid #eee;">{b["service"]}</td><td style="padding:8px; border-bottom:1px solid #eee; text-align: right;">{fmt(b["val"])}</td></tr>' for b in daily_bookings])}
+                </table>
+                
+                <br>
+
+                <h3 style="border-bottom: 2px solid #eee; padding-bottom: 5px;">💵 Entradas Avulsas ({len(daily_cash)})</h3>
+                <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                    {''.join([f'<tr><td style="padding:8px; border-bottom:1px solid #eee;">{c["desc"]}</td><td style="padding:8px; border-bottom:1px solid #eee; text-align: right;">{fmt(c["val"])}</td></tr>' for c in daily_cash])}
+                </table>
+            </div>
+            
+            <div style="background-color: #f3f4f6; padding: 15px; text-align: center; font-size: 12px; color: #888;">
+                Enviado automaticamente pelo sistema <b>BarberSaaS</b> 💈
+            </div>
+        </div>
+      </body>
+    </html>
+    """
+
+    try:
+        if not MAIL_USERNAME or not MAIL_PASSWORD:
+            print("⚠️ Erro: Credenciais de e-mail não configuradas no .env")
+            return {"status": "Erro: Email não configurado no servidor."}
+
+        msg = MIMEMultipart()
+        msg['From'] = f"BarberSaaS <{MAIL_USERNAME}>"
+        msg['To'] = current_shop.email 
+        msg['Subject'] = f"Fechamento de Caixa - {today_br}"
+        msg.attach(MIMEText(html_content, 'html'))
+
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(MAIL_USERNAME, MAIL_PASSWORD)
+        server.sendmail(MAIL_USERNAME, current_shop.email, msg.as_string())
+        server.quit()
+        
+        return {"status": "Relatório enviado com sucesso!"}
+        
+    except Exception as e:
+        print(f"Erro ao enviar email: {e}")
+        raise HTTPException(500, f"Falha no envio: {str(e)}")

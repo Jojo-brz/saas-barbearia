@@ -1,5 +1,7 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 import { useState, useEffect, useCallback } from "react";
+import toast from "react-hot-toast";
 
 interface Service {
   id: number;
@@ -32,16 +34,14 @@ interface ServiceListProps {
 
 export default function ServiceList({ services, shop }: ServiceListProps) {
   const [barbers, setBarbers] = useState<Barber[]>([]);
-
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [selectedBarber, setSelectedBarber] = useState<Barber | null>(null);
-
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedTime, setSelectedTime] = useState("");
   const [slots, setSlots] = useState<{ time: string; available: boolean }[]>(
-    []
+    [],
   );
 
   const [loading, setLoading] = useState(false);
@@ -91,7 +91,7 @@ export default function ServiceList({ services, shop }: ServiceListProps) {
         }
 
         const res = await fetch(
-          `http://127.0.0.1:8000/barbershops/${shop.slug}/bookings`
+          `http://127.0.0.1:8000/barbershops/${shop.slug}/bookings`,
         );
         const allBookings: Booking[] = await res.json();
 
@@ -99,7 +99,7 @@ export default function ServiceList({ services, shop }: ServiceListProps) {
           .filter(
             (b) =>
               b.date_time.startsWith(dateStr) &&
-              b.barber_id === selectedBarber.id
+              b.barber_id === selectedBarber.id,
           )
           .map((b) => {
             const timePart = b.date_time.split("T")[1];
@@ -107,7 +107,6 @@ export default function ServiceList({ services, shop }: ServiceListProps) {
             return { start, end: start + b.service_duration };
           });
 
-        // INTERVALO DO DIA
         let breakStartMin = -1,
           breakEndMin = -1;
         if (dayConfig.break_start && dayConfig.break_end) {
@@ -119,22 +118,19 @@ export default function ServiceList({ services, shop }: ServiceListProps) {
         const openMin = timeToMinutes(dayConfig.open);
         const closeMin = timeToMinutes(dayConfig.close);
 
-        // MUDANÇA: Incremento de 10 em 10 minutos
-        for (let current = openMin; current < closeMin; current += 10) {
+        for (let current = openMin; current < closeMin; current += 15) {
+          // Step de 15min para mais opções
           const slotStart = current;
           const slotEnd = current + selectedService.duration;
 
           if (slotEnd > closeMin) continue;
 
-          // Verifica colisão com Agendamentos
           let isBusy = busyIntervals.some(
-            (busy) => slotStart < busy.end && slotEnd > busy.start
+            (busy) => slotStart < busy.end && slotEnd > busy.start,
           );
-
-          // Verifica colisão com Intervalo (Almoço)
           if (!isBusy && breakStartMin !== -1) {
             if (slotStart < breakEndMin && slotEnd > breakStartMin) {
-              isBusy = true; // Caiu no almoço
+              isBusy = true;
             }
           }
 
@@ -146,25 +142,25 @@ export default function ServiceList({ services, shop }: ServiceListProps) {
         setSlots(generatedSlots);
       } catch (error) {
         console.error(error);
+        toast.error("Erro ao carregar agenda.");
       } finally {
         setLoadingSlots(false);
       }
     },
-    [selectedService, selectedBarber, shop.hours_config, shop.slug]
+    [selectedService, selectedBarber, shop.hours_config, shop.slug],
   );
 
   useEffect(() => {
-    if (selectedDate && shop && selectedService && selectedBarber) {
+    if (selectedDate && shop && selectedService && selectedBarber)
       generateSlots(selectedDate);
-    }
   }, [selectedDate, shop, selectedService, selectedBarber, generateSlots]);
 
   const handleBooking = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedService || !selectedBarber || !selectedDate || !selectedTime)
       return;
-    setLoading(true);
 
+    setLoading(true);
     try {
       const response = await fetch("http://127.0.0.1:8000/bookings/", {
         method: "POST",
@@ -180,14 +176,14 @@ export default function ServiceList({ services, shop }: ServiceListProps) {
       });
 
       if (response.ok) {
-        alert("Agendamento confirmado!");
+        toast.success("Agendamento confirmado!", { duration: 4000 });
         handleCloseModal();
       } else {
         const err = await response.json();
-        alert(`Erro: ${err.detail}`);
+        toast.error(`Erro: ${err.detail}`);
       }
     } catch {
-      alert("Erro de conexão.");
+      toast.error("Erro de conexão.");
     } finally {
       setLoading(false);
     }
@@ -204,44 +200,46 @@ export default function ServiceList({ services, shop }: ServiceListProps) {
 
   return (
     <div>
-      <div className="flex flex-col gap-4">
+      {/* LISTA DE SERVIÇOS */}
+      <div className="flex flex-col gap-3 pb-20">
         {services.length === 0 ? (
-          <p className="text-gray-500 italic">Sem serviços.</p>
+          <p className="text-zinc-500 italic text-center py-10">
+            Nenhum serviço disponível.
+          </p>
         ) : (
           services.map((service) => (
             <div
               key={service.id}
               onClick={() => setSelectedService(service)}
-              className="flex items-center p-4 bg-white rounded-lg border hover:border-blue-500 cursor-pointer shadow-sm gap-4 transition-all"
+              className="flex items-center p-3 bg-zinc-900/5 hover:bg-zinc-900/10 active:bg-zinc-900/20 rounded-xl border border-transparent hover:border-zinc-300 cursor-pointer gap-4 transition-all group select-none"
             >
-              <div className="w-16 h-16 bg-gray-100 rounded overflow-hidden shrink-0">
+              <div className="w-20 h-20 bg-zinc-200 rounded-lg overflow-hidden shrink-0 shadow-sm">
                 {service.image_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={service.image_url}
                     alt={service.name}
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-gray-400 text-xs">
-                    Foto
+                  <div className="w-full h-full flex items-center justify-center text-zinc-400 text-xs font-bold uppercase">
+                    Sem foto
                   </div>
                 )}
               </div>
               <div className="flex-1">
-                <h3 className="font-bold text-lg text-gray-800">
+                <h3 className="font-black text-lg text-zinc-900 leading-tight">
                   {service.name}
                 </h3>
-                <p className="text-sm text-gray-500">
+                <p className="text-sm text-zinc-500 font-medium">
                   ⏱ {service.duration} min
                 </p>
               </div>
               <div className="text-right">
-                <span className="block font-bold text-blue-600 text-lg">
+                <span className="block font-black text-zinc-900 text-lg">
                   R$ {service.price.toFixed(2)}
                 </span>
-                <button className="text-xs bg-blue-100 text-blue-700 px-3 py-1 rounded mt-1 font-bold">
-                  Agendar
+                <button className="text-[10px] bg-zinc-900 text-white px-3 py-1.5 rounded-full mt-1 font-bold uppercase tracking-wide">
+                  Reservar
                 </button>
               </div>
             </div>
@@ -249,40 +247,52 @@ export default function ServiceList({ services, shop }: ServiceListProps) {
         )}
       </div>
 
+      {/* MODAL DE AGENDAMENTO (BOTTOM SHEET NO MOBILE) */}
       {selectedService && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-lg my-10">
-            <div className="flex justify-between items-center mb-4 border-b pb-2">
-              <h2 className="text-xl font-bold text-gray-900">
-                {selectedService.name}
-              </h2>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+          {/* Overlay Escuro */}
+          <div
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+            onClick={handleCloseModal}
+          ></div>
+
+          {/* Conteúdo do Modal */}
+          <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl z-10 max-h-[90vh] flex flex-col animate-in slide-in-from-bottom-10 duration-300">
+            {/* Header do Modal */}
+            <div className="p-5 border-b border-zinc-100 flex justify-between items-center bg-white rounded-t-3xl sm:rounded-t-2xl sticky top-0 z-20">
+              <div>
+                <h2 className="text-xl font-black text-zinc-900 leading-none">
+                  {selectedService.name}
+                </h2>
+                <p className="text-zinc-500 text-sm mt-1">
+                  R$ {selectedService.price.toFixed(2)} •{" "}
+                  {selectedService.duration} min
+                </p>
+              </div>
               <button
                 onClick={handleCloseModal}
-                className="text-gray-400 text-2xl"
+                className="w-8 h-8 bg-zinc-100 rounded-full flex items-center justify-center text-zinc-500 hover:bg-zinc-200 transition-colors"
               >
-                ×
+                ✕
               </button>
             </div>
 
-            <form onSubmit={handleBooking} className="flex flex-col gap-4">
+            {/* Corpo do Form */}
+            <div className="p-5 overflow-y-auto space-y-6 bg-zinc-50">
+              {/* 1. Escolha do Barbeiro */}
               <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase mb-2">
-                  Escolha o Profissional
+                <label className="block text-xs font-bold text-zinc-400 uppercase mb-3 tracking-wider">
+                  1. Profissional
                 </label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-3">
                   {barbers.map((barber) => (
                     <div
                       key={barber.id}
                       onClick={() => setSelectedBarber(barber)}
-                      className={`p-2 rounded border cursor-pointer flex flex-col items-center gap-1 transition-all ${
-                        selectedBarber?.id === barber.id
-                          ? "border-blue-500 bg-blue-50 ring-1 ring-blue-500"
-                          : "border-gray-200 hover:border-blue-300"
-                      }`}
+                      className={`p-3 rounded-xl border-2 cursor-pointer flex flex-col items-center gap-2 transition-all ${selectedBarber?.id === barber.id ? "border-zinc-900 bg-white shadow-md" : "border-transparent bg-white hover:border-zinc-200"}`}
                     >
-                      <div className="w-10 h-10 rounded-full bg-gray-200 overflow-hidden">
+                      <div className="w-10 h-10 rounded-full bg-zinc-200 overflow-hidden">
                         {barber.photo_url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
                           <img
                             src={barber.photo_url}
                             alt={barber.name}
@@ -290,107 +300,98 @@ export default function ServiceList({ services, shop }: ServiceListProps) {
                           />
                         ) : null}
                       </div>
-                      <span className="text-sm font-bold text-gray-700 truncate w-full text-center">
+                      <span className="text-xs font-bold text-zinc-900 truncate w-full text-center">
                         {barber.name}
                       </span>
                     </div>
                   ))}
-                  {barbers.length === 0 && (
-                    <p className="text-red-500 text-sm">
-                      Nenhum barbeiro disponível.
-                    </p>
-                  )}
                 </div>
               </div>
 
               {selectedBarber && (
-                <>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
-                        Seu Nome
-                      </label>
+                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                  {/* 2. Seus Dados */}
+                  <div>
+                    <label className="block text-xs font-bold text-zinc-400 uppercase mb-3 tracking-wider">
+                      2. Seus Dados
+                    </label>
+                    <div className="space-y-3">
                       <input
                         required
-                        className="w-full border p-2 rounded text-black"
+                        placeholder="Seu Nome"
+                        className="w-full bg-white border border-zinc-200 p-3 rounded-xl text-zinc-900 font-bold outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 transition-all"
                         value={customerName}
                         onChange={(e) => setCustomerName(e.target.value)}
                       />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
-                        WhatsApp
-                      </label>
                       <input
                         required
-                        className="w-full border p-2 rounded text-black"
+                        placeholder="Seu WhatsApp (11 99999...)"
+                        type="tel"
+                        className="w-full bg-white border border-zinc-200 p-3 rounded-xl text-zinc-900 font-bold outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900 transition-all"
                         value={customerPhone}
                         onChange={(e) => setCustomerPhone(e.target.value)}
                       />
                     </div>
                   </div>
 
+                  {/* 3. Data e Hora */}
                   <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
-                      Data
+                    <label className="block text-xs font-bold text-zinc-400 uppercase mb-3 tracking-wider">
+                      3. Data e Hora
                     </label>
                     <input
                       required
                       type="date"
-                      className="w-full border p-2 rounded text-black font-bold"
+                      className="w-full bg-white border border-zinc-200 p-3 rounded-xl text-zinc-900 font-bold outline-none focus:border-zinc-900 mb-4"
                       min={new Date().toISOString().split("T")[0]}
                       value={selectedDate}
                       onChange={(e) => setSelectedDate(e.target.value)}
                     />
+
+                    {selectedDate && (
+                      <div className="bg-white p-3 rounded-xl border border-zinc-200">
+                        {loadingSlots ? (
+                          <div className="text-center py-4 text-zinc-400 text-sm animate-pulse">
+                            Consultando agenda...
+                          </div>
+                        ) : slots.length === 0 ? (
+                          <div className="text-center py-3 text-red-500 text-sm font-bold">
+                            Dia sem horários livres.
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-4 gap-2 max-h-40 overflow-y-auto pr-1 custom-scrollbar">
+                            {slots.map(({ time, available }) => (
+                              <button
+                                key={time}
+                                type="button"
+                                disabled={!available}
+                                onClick={() => setSelectedTime(time)}
+                                className={`py-2 rounded-lg text-xs font-bold border transition-all ${!available ? "bg-zinc-50 text-zinc-300 line-through border-transparent" : selectedTime === time ? "bg-zinc-900 text-white border-zinc-900 shadow-md transform scale-105" : "bg-white text-zinc-700 border-zinc-200 hover:border-zinc-900"}`}
+                              >
+                                {time}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
-
-                  {selectedDate && (
-                    <div>
-                      <label className="block text-xs font-bold text-gray-500 uppercase mb-2">
-                        Horários com {selectedBarber.name}
-                      </label>
-                      {loadingSlots ? (
-                        <div className="text-center py-4 text-gray-500">
-                          Buscando agenda...
-                        </div>
-                      ) : slots.length === 0 ? (
-                        <div className="text-center py-2 text-red-500 bg-red-50 rounded">
-                          Sem horários.
-                        </div>
-                      ) : (
-                        <div className="grid grid-cols-4 gap-2 max-h-40 overflow-y-auto pr-1">
-                          {slots.map(({ time, available }) => (
-                            <button
-                              key={time}
-                              type="button"
-                              disabled={!available}
-                              onClick={() => setSelectedTime(time)}
-                              className={`py-2 px-1 rounded text-sm font-bold border ${
-                                !available
-                                  ? "bg-gray-100 text-gray-300 line-through"
-                                  : selectedTime === time
-                                  ? "bg-blue-600 text-white"
-                                  : "bg-white hover:border-blue-500 text-gray-700"
-                              }`}
-                            >
-                              {time}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    disabled={loading || !selectedTime}
-                    className="bg-green-600 text-white p-3 rounded font-bold hover:bg-green-700 disabled:opacity-50 mt-2"
-                  >
-                    {loading ? "..." : "Confirmar Agendamento"}
-                  </button>
-                </>
+                </div>
               )}
-            </form>
+            </div>
+
+            {/* Footer do Modal */}
+            <div className="p-5 border-t border-zinc-100 bg-white pb-8 sm:pb-5">
+              <button
+                onClick={handleBooking}
+                disabled={
+                  loading || !selectedTime || !customerName || !customerPhone
+                }
+                className="w-full bg-green-600 text-white py-4 rounded-xl font-black uppercase tracking-wide text-sm shadow-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95"
+              >
+                {loading ? "Confirmando..." : "Confirmar Agendamento"}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -1,7 +1,8 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import toast from "react-hot-toast";
+import { Logo } from "../../src/components/logo";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -26,62 +27,60 @@ export default function LoginPage() {
         localStorage.setItem("barber_token", data.access_token);
         localStorage.setItem("barber_slug", data.slug);
         localStorage.setItem("barber_role", data.role);
-
-        if (data.role === "admin") router.push("/super-admin");
-        else router.push(`/admin/${data.slug}`);
+        toast.success("Login realizado com sucesso!");
+        setTimeout(() => {
+          if (data.role === "admin") router.push("/super-admin");
+          else router.push(`/admin/${data.slug}`);
+        }, 1000);
       } else {
-        alert("Dados incorretos.");
+        toast.error("E-mail ou senha incorretos.");
       }
     } catch {
-      alert("Erro de conexão.");
+      toast.error("Erro ao conectar com o servidor.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 p-4">
-      <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-md">
-        <h1 className="text-2xl font-bold text-center mb-6 text-gray-800">
-          Acesso ao Painel 🔐
-        </h1>
+    <div className="min-h-screen flex items-center justify-center bg-zinc-50 p-4">
+      <div className="bg-white p-6 md:p-10 rounded-2xl shadow-xl w-full max-w-sm border border-zinc-200">
+        <div className="flex justify-center mb-8">
+          <Logo className="w-40 h-auto" color="#18181b" />
+        </div>
+
         <form onSubmit={handleLogin} className="space-y-4">
           <div>
-            <label className="block text-sm font-bold text-gray-700">
+            <label className="block text-[10px] font-black text-zinc-400 uppercase mb-1 tracking-wider">
               E-mail
             </label>
             <input
               required
               type="email"
-              className="w-full border p-2 rounded text-black"
+              className="w-full bg-zinc-50 border border-zinc-200 p-3 rounded-xl text-zinc-900 focus:border-zinc-900 focus:bg-white outline-none transition-all font-medium"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
           </div>
           <div>
-            <label className="block text-sm font-bold text-gray-700">
+            <label className="block text-[10px] font-black text-zinc-400 uppercase mb-1 tracking-wider">
               Senha
             </label>
             <input
               required
               type="password"
-              className="w-full border p-2 rounded text-black"
+              className="w-full bg-zinc-50 border border-zinc-200 p-3 rounded-xl text-zinc-900 focus:border-zinc-900 focus:bg-white outline-none transition-all font-medium"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
           <button
             disabled={loading}
-            className="w-full bg-blue-900 text-white font-bold py-3 rounded hover:bg-blue-800"
+            className="w-full bg-zinc-900 text-white font-black py-4 rounded-xl hover:bg-black transition-transform active:scale-95 uppercase tracking-wide text-xs shadow-lg mt-4"
           >
-            {loading ? "..." : "Entrar"}
+            {loading ? "Entrando..." : "Acessar Painel"}
           </button>
         </form>
-        <p className="text-center mt-6 text-xs text-gray-400">
-          <Link href="/" className="hover:underline">
-            ← Voltar para Início
-          </Link>
-        </p>
       </div>
     </div>
   );
