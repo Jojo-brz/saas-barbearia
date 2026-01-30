@@ -9,11 +9,11 @@ from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 from pydantic import BaseModel
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, status
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, status, Header
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from sqlmodel import Session, select
+from sqlmodel import Session, select, delete # Adicionado 'delete'
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from email.mime.text import MIMEText
@@ -102,7 +102,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-origins = ["http://localhost:3000"]
+origins = ["http://localhost:3000", "https://barber-api.onrender.com"] # Ajuste conforme necessário
 app.add_middleware(CORSMiddleware, allow_origins=origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
 os.makedirs("uploads", exist_ok=True)
@@ -133,6 +133,32 @@ async def get_current_super_admin(token: str = Depends(oauth2_scheme), session: 
     admin = session.exec(select(SuperAdmin).where(SuperAdmin.email == email)).first()
     if admin is None: raise HTTPException(status_code=401, detail="Admin não encontrado")
     return admin
+
+# --- ROTA DE LIMPEZA DIÁRIA (NOVO) ---
+@app.delete("/cleanup/")
+def cleanup_old_data(key: str, session: Session = Depends(get_session)):
+    """
+    Limpa agendamentos e entradas de caixa ANTERIORES a hoje.
+    Protegido por uma chave secreta na URL (key).
+    """
+    # Verifica se a chave passada na URL é a mesma do .env
+    if key != SECRET_KEY:
+        raise HTTPException(status_code=403, detail="Chave de limpeza inválida")
+    
+    today_str = date.today().isoformat() # Ex: "2024-02-15"
+    
+    # 1. Deletar Agendamentos Antigos (Data menor que hoje)
+    # A string de data ISO funciona bem com comparações de string (ex: "2024-01-01" < "2024-02-15")
+    statement_bookings = delete(Booking).where(Booking.date_time < today_str)
+    session.exec(statement_bookings)
+    
+    # 2. Deletar Caixa Antigo
+    statement_cash = delete(CashEntry).where(CashEntry.date < today_str)
+    session.exec(statement_cash)
+    
+    session.commit()
+    
+    return {"message": "Limpeza concluída! Dados anteriores a hoje foram removidos."}
 
 # --- LOGIN UNIFICADO ---
 
@@ -241,7 +267,6 @@ def read_barbers(slug_url: str, session: Session = Depends(get_session)):
     if not shop: raise HTTPException(404)
     return shop.barbers
 
-# Rota Atualizada para fornecer dados completos ao Frontend
 @app.get("/barbershops/{slug_url}/bookings", response_model=List[dict])
 def read_bookings(slug_url: str, session: Session = Depends(get_session)):
     shop = session.exec(select(Barbershop).where(Barbershop.slug == slug_url)).first()
@@ -251,7 +276,6 @@ def read_bookings(slug_url: str, session: Session = Depends(get_session)):
         service = session.get(Service, b.service_id)
         duration = service.duration if service else 30
         
-        # Estrutura completa para o React não reclamar
         results.append({
             "id": b.id,
             "customer_name": b.customer_name,
@@ -349,7 +373,6 @@ def delete_barber(barber_id: int, session: Session = Depends(get_session), curre
     session.commit()
     return {"ok": True}
 
-# ROTA PARA CANCELAR AGENDAMENTO
 @app.delete("/bookings/{booking_id}")
 def delete_booking(booking_id: int, session: Session = Depends(get_session), current_shop: Barbershop = Depends(get_current_shop)):
     booking = session.get(Booking, booking_id)
@@ -367,7 +390,6 @@ def create_cash_entry(data: CashEntryCreate, session: Session = Depends(get_sess
     session.refresh(entry)
     return entry
 
-# ROTA PARA CANCELAR CAIXA AVULSO
 @app.delete("/cash_entries/{entry_id}")
 def delete_cash_entry(entry_id: int, session: Session = Depends(get_session), current_shop: Barbershop = Depends(get_current_shop)):
     entry = session.get(CashEntry, entry_id)
