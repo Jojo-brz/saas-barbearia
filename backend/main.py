@@ -134,6 +134,10 @@ async def get_current_super_admin(token: str = Depends(oauth2_scheme), session: 
     if admin is None: raise HTTPException(status_code=401, detail="Admin não encontrado")
     return admin
 
+@app.get("/")
+def home():
+    return {"message": "API BarberSaaS está Online! 🚀 Acesse /docs para ver a documentação."}
+
 # --- ROTA DE LIMPEZA DIÁRIA (NOVO) ---
 @app.delete("/cleanup/")
 def cleanup_old_data(key: str, session: Session = Depends(get_session)):
