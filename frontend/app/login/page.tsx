@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import { Logo } from "../../src/components/logo";
+import { Logo } from "../../src/components/Logo";
 
 export default function LoginPage() {
   const router = useRouter();
