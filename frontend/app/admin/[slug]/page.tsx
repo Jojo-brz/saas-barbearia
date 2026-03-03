@@ -1,975 +1,1279 @@
-/* eslint-disable @next/next/no-img-element */
-/* eslint-disable @typescript-eslint/no-unused-vars */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
-import { useState, useEffect, use } from "react";
+
+import { useState, useEffect, use, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Scissors,
+  Clock,
+  User,
+  Check,
+  Loader2,
+  LogOut,
+  Calendar,
+  Menu,
+  LayoutDashboard,
+  ShoppingBag,
+  Settings,
+  Plus,
+  Image as ImageIcon,
+  Phone,
+  Trash2,
+  DollarSign,
+  TrendingUp,
+  PlusCircle,
+  MinusCircle,
+  FileText,
+  CheckCircle2,
+  Mail,
+  Send,
+  X,
+  Copy,
+  Camera,
+  Crop,
+  EyeOff,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 
+// --- TIPAGENS ---
+interface Appointment {
+  id: string;
+  clientName: string;
+  phone: string;
+  service: string;
+  time: string;
+  price: number;
+  duration: number;
+}
 interface Service {
-  id: number;
+  id: string;
   name: string;
   price: number;
   duration: number;
-  image_url?: string;
+  hidePrice?: boolean;
 }
-interface Barber {
-  id: number;
+interface Product {
+  id: string;
   name: string;
-  photo_url?: string;
+  price: number;
+  stock: number;
 }
-interface Booking {
-  id: number;
-  customer_name: string;
-  customer_phone: string;
-  date_time: string;
-  service_id: number;
-  service_duration: number;
-  barber_id: number;
-}
-interface Barbershop {
-  id: number;
-  name: string;
-  slug: string;
-  hours_config: string;
-  logo_url?: string;
-}
-interface CashEntry {
-  id: number;
+interface AvulsoSale {
+  id: string;
   description: string;
-  value: number;
-  date: string;
+  price: number;
+  time: string;
 }
-type DayConfig = {
-  open: string;
-  close: string;
-  break_start?: string;
-  break_end?: string;
-  active: boolean;
-};
-type WeekConfig = Record<string, DayConfig>;
 
-const DAYS_ORDER = [
-  "monday",
-  "tuesday",
-  "wednesday",
-  "thursday",
-  "friday",
-  "saturday",
-  "sunday",
+// --- DADOS SIMULADOS INICIAIS ---
+const INITIAL_APPOINTMENTS: Appointment[] = [
+  {
+    id: "1",
+    clientName: "Carlos Eduardo",
+    phone: "(53) 99123-4567",
+    service: "Corte Degradê",
+    time: "14:00",
+    price: 35,
+    duration: 45,
+  },
+  {
+    id: "2",
+    clientName: "Lucas Ferreira",
+    phone: "(53) 98888-1122",
+    service: "Corte + Barba",
+    time: "15:30",
+    price: 55,
+    duration: 60,
+  },
 ];
-const DAYS_TRANSLATION: Record<string, string> = {
-  monday: "Segunda",
-  tuesday: "Terça",
-  wednesday: "Quarta",
-  thursday: "Quinta",
-  friday: "Sexta",
-  saturday: "Sábado",
-  sunday: "Domingo",
-};
 
-export default function AdminPage({
+const INITIAL_SERVICES: Service[] = [
+  {
+    id: "s1",
+    name: "Corte Degradê",
+    price: 35,
+    duration: 45,
+    hidePrice: false,
+  },
+  {
+    id: "s2",
+    name: "Corte + Barba",
+    price: 55,
+    duration: 60,
+    hidePrice: false,
+  },
+  {
+    id: "s3",
+    name: "Luzes / Platinado",
+    price: 120,
+    duration: 120,
+    hidePrice: true,
+  },
+];
+
+const INITIAL_PRODUCTS: Product[] = [
+  { id: "p1", name: "Pomada Efeito Matte", price: 45, stock: 12 },
+  { id: "p2", name: "Heineken Long Neck", price: 12, stock: 24 },
+];
+
+export default function AdminDashboard({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }) {
-  const { slug } = use(params);
+  const resolvedParams = use(params);
   const router = useRouter();
 
-  // States
-  const [shop, setShop] = useState<Barbershop | null>(null);
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [services, setServices] = useState<Service[]>([]);
-  const [barbers, setBarbers] = useState<Barber[]>([]);
-  const [cashEntries, setCashEntries] = useState<CashEntry[]>([]);
-  const [loading, setLoading] = useState(true);
+  // --- REFERÊNCIAS PARA UPLOAD DE ARQUIVOS ---
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const portfolioInputRef = useRef<HTMLInputElement>(null);
 
-  // Forms States
+  // --- ESTADOS DE LAYOUT ---
+  const [activeTab, setActiveTab] = useState("perfil");
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // --- ESTADOS DE DADOS ---
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [services, setServices] = useState<Service[]>(INITIAL_SERVICES);
+  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
+  const [isLoading, setIsLoading] = useState(true);
+  const [processingId, setProcessingId] = useState<string | null>(null);
+
+  // --- ESTADOS DO CAIXA E FINANCEIRO ---
+  const [lucroMensal] = useState(4250.0);
+  const [lucroDia, setLucroDia] = useState(120.0);
+  const [vendasAvulsas, setVendasAvulsas] = useState<AvulsoSale[]>([]);
+  const [novaVendaDesc, setNovaVendaDesc] = useState("");
+  const [novaVendaValor, setNovaVendaValor] = useState("");
+  const [observacaoCaixa, setObservacaoCaixa] = useState("");
+
+  // --- ESTADOS DE MODAIS E PERFIL ---
+  const [showEmailPrompt, setShowEmailPrompt] = useState(false);
+  const [showClosingSuccess, setShowClosingSuccess] = useState(false);
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
+  const [testerEmail, setTesterEmail] = useState("");
+
+  const [showNewServiceModal, setShowNewServiceModal] = useState(false);
+  const [showNewProductModal, setShowNewProductModal] = useState(false);
+
+  // Estado para a Imagem da Logo e Fotos do Portfólio
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [portfolioPhotos, setPortfolioPhotos] = useState<string[]>([
+    "https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=500&q=80",
+    "https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=500&q=80",
+  ]);
+
+  // Estados para o Sistema de Enquadramento (Crop)
+  const [showCropModal, setShowCropModal] = useState(false);
+  const [selectedFileUrl, setSelectedFileUrl] = useState<string | null>(null);
+  const [uploadTarget, setUploadTarget] = useState<"logo" | "portfolio" | null>(
+    null,
+  );
+
+  // --- FORMULÁRIOS ESTADOS ---
   const [newServiceName, setNewServiceName] = useState("");
   const [newServicePrice, setNewServicePrice] = useState("");
   const [newServiceDuration, setNewServiceDuration] = useState("30");
-  const [newServiceImage, setNewServiceImage] = useState("");
-  const [newBarberName, setNewBarberName] = useState("");
-  const [newBarberPhoto, setNewBarberPhoto] = useState("");
-  const [cashDesc, setCashDesc] = useState("");
-  const [cashValue, setCashValue] = useState("");
-  const [showHoursModal, setShowHoursModal] = useState(false);
-  const [hoursConfig, setHoursConfig] = useState<WeekConfig>({});
-  const [uploading, setUploading] = useState(false);
-  const [shareLink, setShareLink] = useState("");
+  const [newServiceHidePrice, setNewServiceHidePrice] = useState(false);
 
-  const getToken = () => localStorage.getItem("barber_token");
+  const [newProductName, setNewProductName] = useState("");
+  const [newProductPrice, setNewProductPrice] = useState("");
+  const [newProductStock, setNewProductStock] = useState("");
 
-  // Fetch Data
   useEffect(() => {
-    const token = getToken();
-    const storedSlug = localStorage.getItem("barber_slug");
-    if (!token || storedSlug !== slug) {
-      router.push("/login");
-      return;
-    }
-    setShareLink(`${window.location.origin}/${slug}`);
+    setTimeout(() => {
+      setAppointments(INITIAL_APPOINTMENTS);
+      setIsLoading(false);
+    }, 1500);
+  }, []);
 
-    const fetchData = async () => {
-      try {
-        const headers = { Authorization: `Bearer ${token}` };
-        const [resShop, resBookings, resServices, resBarbers, resCash] =
-          await Promise.all([
-            fetch(`http://127.0.0.1:8000/barbershops/${slug}`, { headers }),
-            fetch(`http://127.0.0.1:8000/barbershops/${slug}/bookings`, {
-              headers,
-            }),
-            fetch(`http://127.0.0.1:8000/barbershops/${slug}/services`, {
-              headers,
-            }),
-            fetch(`http://127.0.0.1:8000/barbershops/${slug}/barbers`, {
-              headers,
-            }),
-            fetch(`http://127.0.0.1:8000/barbershops/${slug}/cash_entries`, {
-              headers,
-            }),
-          ]);
-
-        if (resShop.ok) {
-          const data = await resShop.json();
-          setShop(data);
-          try {
-            setHoursConfig(JSON.parse(data.hours_config));
-          } catch {}
-        }
-        if (resBookings.ok) setBookings(await resBookings.json());
-        if (resServices.ok) setServices(await resServices.json());
-        if (resBarbers.ok) setBarbers(await resBarbers.json());
-        if (resCash.ok) setCashEntries(await resCash.json());
-      } catch (e) {
-        toast.error("Erro ao carregar dados.");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, [slug, router]);
-
-  // Handlers
-  const handleUpload = async (file: File) => {
-    setUploading(true);
-    const fd = new FormData();
-    fd.append("file", file);
-    try {
-      const res = await fetch("http://127.0.0.1:8000/upload/", {
-        method: "POST",
-        body: fd,
-        headers: { Authorization: `Bearer ${getToken()}` },
-      });
-      const d = await res.json();
-      setUploading(false);
-      return d.url;
-    } catch {
-      setUploading(false);
-      toast.error("Erro no upload");
-      return null;
-    }
-  };
-
-  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files?.[0] && shop) {
-      const url = await handleUpload(e.target.files[0]);
-      if (url) {
-        await fetch(`http://127.0.0.1:8000/barbershops/${shop.id}/logo`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${getToken()}`,
-          },
-          body: JSON.stringify({ logo_url: url }),
-        });
-        setShop({ ...shop, logo_url: url });
-        toast.success("Logo atualizada!");
-      }
-    }
-  };
-  const handleNewServiceImage = async (
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    if (e.target.files?.[0]) {
-      const url = await handleUpload(e.target.files[0]);
-      if (url) setNewServiceImage(url);
-    }
-  };
-  const handleNewBarberPhoto = async (
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    if (e.target.files?.[0]) {
-      const url = await handleUpload(e.target.files[0]);
-      if (url) setNewBarberPhoto(url);
-    }
-  };
-
-  const handleAddBarber = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!shop) return;
-    const res = await fetch("http://127.0.0.1:8000/barbers/", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${getToken()}`,
-      },
-      body: JSON.stringify({
-        name: newBarberName,
-        photo_url: newBarberPhoto,
-        barbershop_id: shop.id,
-      }),
-    });
-    if (res.ok) {
-      const s = await res.json();
-      setBarbers([...barbers, s]);
-      setNewBarberName("");
-      setNewBarberPhoto("");
-      toast.success("Barbeiro adicionado!");
-    }
-  };
-  const handleDeleteBarber = async (id: number) => {
-    if (confirm("Demitir?")) {
-      await fetch(`http://127.0.0.1:8000/barbers/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${getToken()}` },
-      });
-      setBarbers(barbers.filter((b) => b.id !== id));
-      toast.success("Barbeiro removido.");
-    }
-  };
-
-  const handleAddService = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!shop) return;
-    const res = await fetch("http://127.0.0.1:8000/services/", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${getToken()}`,
-      },
-      body: JSON.stringify({
-        name: newServiceName,
-        price: parseFloat(newServicePrice),
-        duration: parseInt(newServiceDuration),
-        barbershop_id: shop.id,
-        image_url: newServiceImage,
-      }),
-    });
-    if (res.ok) {
-      const s = await res.json();
-      setServices([...services, s]);
-      setNewServiceName("");
-      setNewServicePrice("");
-      setNewServiceImage("");
-      toast.success("Serviço criado!");
-    }
-  };
-  const handleDeleteService = async (id: number) => {
-    if (confirm("Excluir?")) {
-      await fetch(`http://127.0.0.1:8000/services/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${getToken()}` },
-      });
-      setServices(services.filter((s) => s.id !== id));
-      toast.success("Serviço removido.");
-    }
-  };
-
-  const saveHours = async () => {
-    if (!shop) return;
-    await fetch(`http://127.0.0.1:8000/barbershops/${shop.id}/hours`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${getToken()}`,
-      },
-      body: JSON.stringify({ hours_config: JSON.stringify(hoursConfig) }),
-    });
-    setShowHoursModal(false);
-    toast.success("Horários salvos!");
-  };
-  const handleHourChange = (d: string, f: keyof DayConfig, v: any) =>
-    setHoursConfig((p) => ({ ...p, [d]: { ...p[d], [f]: v } }));
-
-  const handleAddCash = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!shop) return;
-    const today = new Date().toLocaleDateString("en-CA");
-    const res = await fetch("http://127.0.0.1:8000/cash_entries/", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${getToken()}`,
-      },
-      body: JSON.stringify({
-        description: cashDesc,
-        value: parseFloat(cashValue),
-        date: today,
-        barbershop_id: shop.id,
-      }),
-    });
-    if (res.ok) {
-      const saved = await res.json();
-      setCashEntries([...cashEntries, saved]);
-      setCashDesc("");
-      setCashValue("");
-      toast.success("Entrada registrada!");
-    }
-  };
-  const handleDeleteCash = async (id: number) => {
-    if (confirm("Apagar?")) {
-      const res = await fetch(`http://127.0.0.1:8000/cash_entries/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${getToken()}` },
-      });
-      if (res.ok) {
-        setCashEntries(cashEntries.filter((c) => c.id !== id));
-        toast.success("Entrada removida.");
-      }
-    }
-  };
-
-  const handleCancelBooking = async (id: number) => {
-    if (confirm("Cancelar agendamento?")) {
-      const res = await fetch(`http://127.0.0.1:8000/bookings/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${getToken()}` },
-      });
-      if (res.ok) {
-        setBookings(bookings.filter((b) => b.id !== id));
-        toast.success("Agendamento cancelado.");
-      }
-    }
-  };
-  const handleSendReport = async () => {
-    if (!confirm("Enviar relatório por e-mail?")) return;
-    const res = await fetch(
-      `http://127.0.0.1:8000/barbershops/${slug}/send_report`,
-      { method: "POST", headers: { Authorization: `Bearer ${getToken()}` } },
-    );
-    if (res.ok) toast.success("Relatório enviado!");
-    else toast.error("Erro ao enviar.");
-  };
-  const logout = () => {
+  const formatCurrency = (value: number) =>
+    `R$ ${value.toFixed(2).replace(".", ",")}`;
+  const handleLogout = () => {
     localStorage.clear();
     router.push("/login");
   };
 
-  if (loading)
-    return (
-      <div className="p-10 text-center animate-pulse">Carregando painel...</div>
+  // =========================================================================
+  // SISTEMA DE UPLOAD E ENQUADRAMENTO DE IMAGENS
+  // =========================================================================
+  const handleFileSelect = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    target: "logo" | "portfolio",
+  ) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const fileUrl = URL.createObjectURL(file);
+      setSelectedFileUrl(fileUrl);
+      setUploadTarget(target);
+      setShowCropModal(true);
+      e.target.value = "";
+    }
+  };
+
+  const handleConfirmCrop = () => {
+    if (uploadTarget === "logo" && selectedFileUrl) {
+      setLogoUrl(selectedFileUrl);
+      toast.success("Logo atualizada com sucesso!");
+    } else if (uploadTarget === "portfolio" && selectedFileUrl) {
+      setPortfolioPhotos([...portfolioPhotos, selectedFileUrl]);
+      toast.success("Foto adicionada ao portfólio!");
+    }
+
+    setShowCropModal(false);
+    setSelectedFileUrl(null);
+    setUploadTarget(null);
+  };
+
+  const handleDeletePhoto = (indexToRemove: number) => {
+    if (confirm("Deseja realmente excluir esta foto do portfólio?")) {
+      setPortfolioPhotos(
+        portfolioPhotos.filter((_, index) => index !== indexToRemove),
+      );
+      toast.error("Foto removida.");
+    }
+  };
+
+  // --- OUTRAS AÇÕES CRUD ---
+  const handleCompleteAppointment = (app: Appointment) => {
+    setProcessingId(app.id);
+    setTimeout(() => {
+      setAppointments((prev) => prev.filter((a) => a.id !== app.id));
+      setLucroDia((prev) => prev + app.price);
+      setProcessingId(null);
+      toast.success("Atendimento concluído e valor em caixa!");
+    }, 1000);
+  };
+
+  const handleCancelAppointment = (id: string) => {
+    if (
+      confirm(
+        "Deseja cancelar este agendamento? O horário ficará livre para os clientes novamente.",
+      )
+    ) {
+      setAppointments((prev) => prev.filter((a) => a.id !== id));
+      toast.error("Agendamento removido.");
+    }
+  };
+
+  const handleAddService = (e: React.FormEvent) => {
+    e.preventDefault();
+    const p = parseFloat(newServicePrice.replace(",", "."));
+    if (isNaN(p)) return toast.error("Valor inválido");
+
+    setServices([
+      ...services,
+      {
+        id: Date.now().toString(),
+        name: newServiceName,
+        price: p,
+        duration: parseInt(newServiceDuration),
+        hidePrice: newServiceHidePrice,
+      },
+    ]);
+
+    setShowNewServiceModal(false);
+    setNewServiceName("");
+    setNewServicePrice("");
+    setNewServiceDuration("30");
+    setNewServiceHidePrice(false);
+    toast.success("Serviço adicionado!");
+  };
+
+  const handleAddProduct = (e: React.FormEvent) => {
+    e.preventDefault();
+    const p = parseFloat(newProductPrice.replace(",", "."));
+    const s = parseInt(newProductStock);
+    if (isNaN(p) || isNaN(s)) return toast.error("Valores inválidos");
+
+    setProducts([
+      ...products,
+      { id: Date.now().toString(), name: newProductName, price: p, stock: s },
+    ]);
+    setShowNewProductModal(false);
+    setNewProductName("");
+    setNewProductPrice("");
+    setNewProductStock("");
+    toast.success("Produto adicionado ao estoque!");
+  };
+
+  const updateStock = (id: string, delta: number) => {
+    setProducts((prev) =>
+      prev.map((p) => {
+        if (p.id === id) {
+          const ns = p.stock + delta;
+          return { ...p, stock: ns >= 0 ? ns : 0 };
+        }
+        return p;
+      }),
     );
-  if (!shop)
-    return <div className="p-10 text-center">Loja não encontrada.</div>;
+  };
 
-  const servicesMap = services.reduce(
-    (acc, s) => ({ ...acc, [s.id]: s }),
-    {} as Record<number, Service>,
-  );
+  const handleAddVendaAvulsa = (e: React.FormEvent) => {
+    e.preventDefault();
+    const v = parseFloat(novaVendaValor.replace(",", "."));
+    if (!novaVendaDesc || isNaN(v)) return;
+    setVendasAvulsas([
+      {
+        id: Date.now().toString(),
+        description: novaVendaDesc,
+        price: v,
+        time: new Date().toLocaleTimeString("pt-BR", {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      },
+      ...vendasAvulsas,
+    ]);
+    setLucroDia((prev) => prev + v);
+    setNovaVendaDesc("");
+    setNovaVendaValor("");
+    toast.success("Venda registrada no caixa!");
+  };
 
-  // Calculations
-  const todayStr = new Date().toLocaleDateString("en-CA");
-  const dailyBookings = bookings.filter((b) =>
-    b.date_time.startsWith(todayStr),
-  );
-  const dailyCash = cashEntries.filter((c) => c.date === todayStr);
+  const handleConfirmarFechamento = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setIsSendingEmail(true);
+    setTimeout(() => {
+      setIsSendingEmail(false);
+      setShowEmailPrompt(false);
+      setShowClosingSuccess(true);
+      setTimeout(() => {
+        setShowClosingSuccess(false);
+        setLucroDia(0);
+        setVendasAvulsas([]);
+        setObservacaoCaixa("");
+        setTesterEmail("");
+      }, 4000);
+    }, 2000);
+  };
 
-  const bookingsRevenue = dailyBookings.reduce((total, b) => {
-    const service = servicesMap[Number(b.service_id)];
-    return total + (service ? service.price : 0);
-  }, 0);
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(`barbersaas.com/${resolvedParams.slug}`);
+    toast.success("Link copiado! Cole na bio do seu Instagram.");
+  };
 
-  const cashRevenue = dailyCash.reduce((total, c) => total + c.value, 0);
-  const totalRevenue = bookingsRevenue + cashRevenue;
-  const totalForecast =
-    bookings.reduce(
-      (acc, b) => acc + (servicesMap[Number(b.service_id)]?.price || 0),
-      0,
-    ) + cashEntries.reduce((acc, c) => acc + c.value, 0);
+  // --- RENDERS DAS ABAS ---
 
-  return (
-    <div className="min-h-screen bg-zinc-50 p-4 pb-20 md:p-8 font-sans">
-      <div className="max-w-6xl mx-auto space-y-6">
-        {/* HEADER */}
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-zinc-200 flex flex-col md:flex-row justify-between items-center gap-6">
-          <div className="flex flex-col md:flex-row items-center gap-4 text-center md:text-left">
-            <div className="relative w-24 h-24 bg-zinc-100 rounded-full overflow-hidden border-4 border-zinc-900 shadow-md shrink-0 group">
-              {shop.logo_url ? (
-                <img
-                  src={shop.logo_url}
-                  alt="Logo"
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <span className="flex items-center justify-center h-full text-3xl">
-                  💈
-                </span>
-              )}
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleLogoChange}
-                className="absolute inset-0 opacity-0 cursor-pointer"
-              />
-              <div className="absolute inset-0 bg-black bg-opacity-30 flex items-center justify-center text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                Alterar
+  const renderAgenda = () => (
+    <div className="space-y-4 animate-fade-in-up">
+      <div className="mb-8">
+        <h2 className="text-2xl font-extrabold text-white mb-1">
+          Agenda de Hoje
+        </h2>
+        <p className="text-zinc-400 text-sm font-medium flex items-center gap-2">
+          <Calendar className="w-4 h-4 text-cyan-500" />
+          {new Date().toLocaleDateString("pt-BR", {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+          })}
+        </p>
+        <p className="text-xs text-zinc-500 mt-2 bg-zinc-900/50 p-2 rounded-lg border border-zinc-800/50 inline-block">
+          💡 Os agendamentos são feitos exclusivamente pelos clientes através do
+          seu link.
+        </p>
+      </div>
+
+      {isLoading ? (
+        [1, 2].map((n) => (
+          <div
+            key={n}
+            className="bg-zinc-900/40 border border-zinc-800 p-5 rounded-3xl h-36 animate-pulse"
+          ></div>
+        ))
+      ) : appointments.length === 0 ? (
+        <div className="text-center py-16 bg-zinc-900/30 rounded-3xl border border-zinc-800/50 border-dashed">
+          <Check className="w-12 h-12 text-cyan-600 mx-auto mb-4" />
+          <p className="text-white font-bold">Tudo limpo!</p>
+          <p className="text-zinc-500 text-sm mt-1">
+            Nenhum cliente agendou horários para hoje ainda.
+          </p>
+        </div>
+      ) : (
+        appointments.map((app) => (
+          <motion.div
+            key={app.id}
+            layout
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-zinc-900 border border-zinc-800 p-5 rounded-3xl relative overflow-hidden group"
+          >
+            <div className="flex items-start justify-between mb-5">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-zinc-950 flex items-center justify-center rounded-2xl border border-zinc-800">
+                  <User className="w-6 h-6 text-zinc-400" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-lg leading-tight">
+                    {app.clientName}
+                  </h3>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Phone className="w-3 h-3 text-cyan-500" />
+                    <span className="text-zinc-400 text-xs font-medium">
+                      {app.phone}
+                    </span>
+                  </div>
+                  <p className="text-cyan-400 text-sm font-medium mt-1">
+                    {app.service}{" "}
+                    <span className="text-zinc-600 ml-1">
+                      ({app.duration}m)
+                    </span>
+                  </p>
+                </div>
               </div>
-            </div>
-            <div>
-              <h1 className="text-2xl md:text-3xl font-black text-zinc-900 uppercase tracking-tight">
-                {shop.name}
-              </h1>
-              <button
-                onClick={() => setShowHoursModal(true)}
-                className="text-sm text-zinc-500 hover:text-black underline font-bold mt-1"
-              >
-                ⚙️ Configurar Horários
-              </button>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-3 w-full md:w-auto">
-            <div className="grid grid-cols-2 gap-3 md:flex">
-              <div className="bg-green-50 p-3 rounded-lg border border-green-200 text-center flex-1 min-w-30">
-                <span className="block text-[10px] md:text-xs text-green-700 font-bold uppercase">
-                  Hoje
-                </span>
-                <span className="block text-xl md:text-2xl font-black text-green-900">
-                  R$ {totalRevenue.toFixed(2)}
-                </span>
-              </div>
-              <div className="bg-blue-50 p-3 rounded-lg border border-blue-200 text-center flex-1 min-w-30">
-                <span className="block text-[10px] md:text-xs text-blue-700 font-bold uppercase">
-                  Total
-                </span>
-                <span className="block text-xl md:text-2xl font-black text-blue-900">
-                  R$ {totalForecast.toFixed(2)}
-                </span>
+              <div className="flex flex-col items-end gap-2">
+                <div className="flex items-center gap-1.5 bg-zinc-950 px-3 py-1.5 rounded-lg border border-zinc-800 text-zinc-300">
+                  <Clock className="w-3.5 h-3.5 text-cyan-500" />
+                  <span className="font-bold text-sm tracking-wider">
+                    {app.time}
+                  </span>
+                </div>
+                <p className="text-zinc-500 text-xs font-semibold">
+                  {formatCurrency(app.price)}
+                </p>
               </div>
             </div>
             <div className="flex gap-2">
               <button
-                onClick={handleSendReport}
-                className="flex-1 bg-zinc-800 text-white py-3 px-4 rounded-lg font-bold text-xs uppercase hover:bg-black transition-colors shadow-sm"
+                onClick={() => handleCancelAppointment(app.id)}
+                className="p-3 rounded-2xl bg-zinc-800 text-zinc-400 hover:text-red-400 hover:bg-red-500/10 transition-colors border border-zinc-700"
+                title="Cancelar Atendimento"
               >
-                📧 Relatório
+                <Trash2 className="w-5 h-5" />
               </button>
               <button
-                onClick={logout}
-                className="bg-red-100 text-red-600 px-4 py-3 rounded-lg font-bold text-xs uppercase hover:bg-red-200 transition-colors"
+                onClick={() => handleCompleteAppointment(app)}
+                disabled={processingId === app.id}
+                className="flex-1 py-3 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 bg-cyan-600/10 text-cyan-500 hover:bg-cyan-600 hover:text-white transition-colors border border-cyan-600/30 disabled:opacity-50"
               >
-                Sair
+                {processingId === app.id ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Check className="w-4 h-4" />
+                )}
+                {processingId === app.id
+                  ? "Recebendo..."
+                  : "Concluir & Receber"}
               </button>
             </div>
-          </div>
-        </div>
+          </motion.div>
+        ))
+      )}
+    </div>
+  );
 
-        {/* LINK SHARE */}
-        <div className="bg-zinc-900 text-white p-5 rounded-xl shadow-lg flex flex-col md:flex-row justify-between items-center gap-4">
-          <div className="text-center md:text-left">
-            <h3 className="font-bold text-lg">📢 Link do Cliente</h3>
-            <p className="text-zinc-400 text-sm">Seu site de agendamento:</p>
-          </div>
-          <div className="flex w-full md:w-auto bg-zinc-800 rounded-lg p-1 border border-zinc-700">
-            <input
-              readOnly
-              value={shareLink}
-              className="bg-transparent text-white px-3 py-2 w-full outline-none font-mono text-sm"
-            />
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(shareLink);
-                toast.success("Link copiado!");
-              }}
-              className="bg-white text-black px-4 py-2 rounded font-bold text-sm uppercase hover:bg-zinc-200"
-            >
-              Copiar
-            </button>
-          </div>
+  const renderServicos = () => (
+    <div className="animate-fade-in-up">
+      <div className="flex justify-between items-end mb-8">
+        <div>
+          <h2 className="text-2xl font-extrabold text-white mb-1">
+            Meus Serviços
+          </h2>
+          <p className="text-zinc-400 text-sm">
+            Controle os serviços disponíveis para os clientes.
+          </p>
         </div>
+        <button
+          onClick={() => setShowNewServiceModal(true)}
+          className="bg-cyan-600 text-white px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-cyan-500 flex items-center gap-2"
+        >
+          <Plus className="w-4 h-4" /> Novo Serviço
+        </button>
+      </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-8">
-            {/* AGENDAMENTOS */}
-            <div className="space-y-4">
-              <h2 className="text-xl font-bold text-zinc-800 uppercase tracking-tight flex items-center gap-2">
-                📅 Agenda{" "}
-                <span className="bg-zinc-200 text-zinc-600 text-xs px-2 py-1 rounded-full">
-                  {bookings.length}
+      <div className="grid grid-cols-1 gap-4">
+        {services.map((s) => (
+          <div
+            key={s.id}
+            className="bg-zinc-900 border border-zinc-800 p-5 rounded-3xl flex justify-between items-center"
+          >
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-zinc-950 flex items-center justify-center rounded-2xl border border-zinc-800">
+                <Scissors className="w-5 h-5 text-zinc-500" />
+              </div>
+              <div>
+                <h3 className="font-bold text-white text-lg flex items-center gap-2">
+                  {s.name}
+                  {/* CORREÇÃO DO TYPESCRIPT AQUI: <span> envolvendo o ícone para usar o title */}
+                  {s.hidePrice && (
+                    <span title="Preço oculto para o cliente">
+                      <EyeOff className="w-4 h-4 text-zinc-600" />
+                    </span>
+                  )}
+                </h3>
+                <p className="text-zinc-500 text-sm flex items-center gap-1 mt-1">
+                  <Clock className="w-3 h-3" /> Duração: {s.duration} min
+                </p>
+              </div>
+            </div>
+            <div className="text-right">
+              {s.hidePrice ? (
+                <span className="bg-zinc-800 text-zinc-400 font-bold px-3 py-1.5 rounded-lg text-sm border border-zinc-700">
+                  Sob Consulta
                 </span>
-              </h2>
-
-              {bookings.length === 0 ? (
-                <div className="bg-white p-8 rounded-xl text-center border border-zinc-200 text-zinc-500">
-                  Nenhum agendamento ainda.
-                </div>
               ) : (
-                <>
-                  <div className="hidden md:block bg-white rounded-xl shadow-sm border border-zinc-200 overflow-hidden">
-                    <div className="max-h-96 overflow-y-auto">
-                      <table className="w-full text-left">
-                        <thead className="bg-zinc-50 text-xs uppercase text-zinc-500 border-b border-zinc-100 sticky top-0">
-                          <tr>
-                            <th className="p-4">Horário</th>
-                            <th className="p-4">Cliente</th>
-                            <th className="p-4">Serviço</th>
-                            <th className="p-4 text-right">Ação</th>
-                          </tr>
-                        </thead>
-                        <tbody className="text-sm divide-y divide-zinc-100">
-                          {bookings.map((b) => (
-                            <tr
-                              key={b.id}
-                              className={`hover:bg-zinc-50 transition-colors ${b.date_time.startsWith(todayStr) ? "bg-green-50/50" : ""}`}
-                            >
-                              <td className="p-4 font-mono font-bold text-zinc-900 whitespace-nowrap">
-                                {new Date(b.date_time).toLocaleString("pt-BR", {
-                                  day: "2-digit",
-                                  month: "2-digit",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}
-                              </td>
-                              <td className="p-4">
-                                <div className="font-bold text-zinc-900">
-                                  {b.customer_name}
-                                </div>
-                                <div className="text-xs text-zinc-500">
-                                  {b.customer_phone}
-                                </div>
-                              </td>
-                              <td className="p-4">
-                                <span className="bg-zinc-100 px-2 py-1 rounded text-xs font-bold text-zinc-700">
-                                  {servicesMap[b.service_id]?.name ||
-                                    "Excluído"}
-                                </span>
-                              </td>
-                              <td className="p-4 text-right">
-                                <button
-                                  onClick={() => handleCancelBooking(b.id)}
-                                  className="text-red-500 text-xs border border-red-200 bg-red-50 px-3 py-1 rounded font-bold hover:bg-red-100 transition-colors"
-                                >
-                                  Cancelar
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  {/* MOBILE CARDS */}
-                  <div className="md:hidden space-y-3">
-                    {bookings.map((b) => (
-                      <div
-                        key={b.id}
-                        className={`bg-white p-4 rounded-xl border shadow-sm flex flex-col gap-3 ${b.date_time.startsWith(todayStr) ? "border-green-200 bg-green-50/30" : "border-zinc-200"}`}
-                      >
-                        <div className="flex justify-between items-start">
-                          <div className="flex items-center gap-2">
-                            <div className="bg-zinc-900 text-white text-xs font-bold px-2 py-1 rounded font-mono">
-                              {new Date(b.date_time).toLocaleTimeString(
-                                "pt-BR",
-                                { hour: "2-digit", minute: "2-digit" },
-                              )}
-                            </div>
-                            <div className="text-xs text-zinc-500 font-bold uppercase">
-                              {new Date(b.date_time).toLocaleDateString(
-                                "pt-BR",
-                                {
-                                  weekday: "short",
-                                  day: "2-digit",
-                                  month: "2-digit",
-                                },
-                              )}
-                            </div>
-                          </div>
-                          <span className="bg-zinc-100 px-2 py-1 rounded text-[10px] font-bold text-zinc-600 uppercase tracking-wide">
-                            {servicesMap[b.service_id]?.name || "Removido"}
-                          </span>
-                        </div>
-                        <div>
-                          <div className="font-bold text-zinc-900 text-lg">
-                            {b.customer_name}
-                          </div>
-                          <div className="text-sm text-zinc-500 flex items-center gap-1">
-                            📱 {b.customer_phone}
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => handleCancelBooking(b.id)}
-                          className="w-full border border-red-200 text-red-600 py-2 rounded-lg font-bold text-xs uppercase hover:bg-red-50 transition-colors"
-                        >
-                          Cancelar Agendamento
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </>
+                <span className="bg-cyan-500/10 text-cyan-400 font-bold px-3 py-1.5 rounded-lg text-sm border border-cyan-500/20">
+                  {formatCurrency(s.price)}
+                </span>
               )}
             </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
-            {/* CAIXA RAPIDO */}
-            <div className="space-y-4">
-              <h2 className="text-xl font-bold text-zinc-800 uppercase tracking-tight">
-                💰 Caixa Rápido
-              </h2>
-              <div className="bg-white p-5 rounded-xl shadow-sm border border-zinc-200">
-                <form
-                  onSubmit={handleAddCash}
-                  className="flex flex-col sm:flex-row gap-3 mb-6"
-                >
-                  <input
-                    className="flex-1 border border-zinc-300 p-3 rounded-lg text-sm text-black outline-none focus:border-zinc-900 transition-colors"
-                    placeholder="Descrição (Ex: Venda Gel)"
-                    value={cashDesc}
-                    onChange={(e) => setCashDesc(e.target.value)}
-                    required
-                  />
-                  <div className="flex gap-3">
-                    <input
-                      className="w-24 border border-zinc-300 p-3 rounded-lg text-sm text-black outline-none focus:border-zinc-900 transition-colors"
-                      type="number"
-                      placeholder="R$"
-                      step="0.01"
-                      value={cashValue}
-                      onChange={(e) => setCashValue(e.target.value)}
-                      required
-                    />
-                    <button className="bg-green-600 text-white px-6 rounded-lg font-bold text-xl hover:bg-green-700 transition-colors shadow-sm">
-                      +
-                    </button>
-                  </div>
-                </form>
-                <div className="divide-y divide-zinc-100 max-h-48 overflow-y-auto">
-                  {cashEntries.map((c) => (
-                    <div
-                      key={c.id}
-                      className="flex justify-between items-center py-3"
-                    >
-                      <span className="text-zinc-700 text-sm font-medium">
-                        {c.description}{" "}
-                        <span className="text-xs text-zinc-400 block sm:inline">
-                          ({new Date(c.date).toLocaleDateString()})
-                        </span>
-                      </span>
-                      <div className="flex items-center gap-3">
-                        <span className="font-bold text-green-700 bg-green-50 px-2 py-1 rounded text-sm">
-                          R$ {c.value.toFixed(2)}
-                        </span>
-                        <button
-                          onClick={() => handleDeleteCash(c.id)}
-                          className="w-6 h-6 flex items-center justify-center text-zinc-400 hover:text-red-500 transition-colors"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+  const renderProducts = () => (
+    <div className="animate-fade-in-up">
+      <div className="flex justify-between items-end mb-8">
+        <div>
+          <h2 className="text-2xl font-extrabold text-white mb-1">
+            Estoque & Bar
+          </h2>
+          <p className="text-zinc-400 text-sm">
+            Atualize o estoque dos produtos.
+          </p>
+        </div>
+        <button
+          onClick={() => setShowNewProductModal(true)}
+          className="bg-cyan-600 text-white px-4 py-2.5 rounded-xl text-sm font-bold hover:bg-cyan-500 flex items-center gap-2"
+        >
+          <Plus className="w-4 h-4" /> Adicionar Produto
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {products.map((prod) => (
+          <div
+            key={prod.id}
+            className="bg-zinc-900 border border-zinc-800 p-5 rounded-3xl flex flex-col justify-between gap-4"
+          >
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="font-bold text-white text-lg">{prod.name}</h3>
+                <p className="text-cyan-400 font-bold">
+                  {formatCurrency(prod.price)}
+                </p>
               </div>
             </div>
-
-            {/* EQUIPE */}
-            <div className="space-y-4">
-              <h2 className="text-xl font-bold text-zinc-800 uppercase tracking-tight">
-                👨‍💈 Equipe
-              </h2>
-              <div className="bg-white p-5 rounded-xl shadow-sm border border-zinc-200">
-                <form
-                  onSubmit={handleAddBarber}
-                  className="flex gap-4 items-center mb-6"
+            <div className="flex items-center justify-between bg-zinc-950 p-2 rounded-2xl border border-zinc-800">
+              <span className="text-zinc-500 text-xs font-bold uppercase ml-3">
+                Estoque
+              </span>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => updateStock(prod.id, -1)}
+                  className="p-1.5 text-zinc-400 hover:text-red-400 transition-colors"
                 >
-                  <div className="relative w-14 h-14 bg-zinc-50 rounded-full border-2 border-dashed border-zinc-300 shrink-0 overflow-hidden hover:border-zinc-500 transition-colors">
-                    {newBarberPhoto ? (
-                      <img
-                        src={newBarberPhoto}
-                        alt="Preview"
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <span className="flex items-center justify-center h-full text-[10px] text-zinc-400 uppercase font-bold text-center leading-none">
-                        Add
-                        <br />
-                        Foto
-                      </span>
-                    )}
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleNewBarberPhoto}
-                      className="absolute inset-0 opacity-0 cursor-pointer"
-                    />
-                  </div>
-                  <div className="flex-1 flex gap-2">
-                    <input
-                      className="w-full border border-zinc-300 p-3 rounded-lg text-sm text-black outline-none focus:border-zinc-900"
-                      value={newBarberName}
-                      onChange={(e) => setNewBarberName(e.target.value)}
-                      placeholder="Nome do Barbeiro"
-                      required
-                    />
-                    <button
-                      disabled={uploading}
-                      className="bg-zinc-900 text-white px-5 rounded-lg font-bold hover:bg-black transition-colors"
-                    >
-                      Ok
-                    </button>
-                  </div>
-                </form>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {barbers.map((barber) => (
-                    <div
-                      key={barber.id}
-                      className="flex items-center gap-3 p-3 bg-zinc-50 rounded-lg border border-zinc-200 relative group hover:border-zinc-400 transition-all"
-                    >
-                      <div className="w-10 h-10 bg-zinc-200 rounded-full overflow-hidden shadow-sm">
-                        {barber.photo_url ? (
-                          <img
-                            src={barber.photo_url}
-                            alt={barber.name}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : null}
-                      </div>
-                      <span className="font-bold text-zinc-700 text-sm truncate">
-                        {barber.name}
-                      </span>
-                      <button
-                        onClick={() => handleDeleteBarber(barber.id)}
-                        className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center shadow-md opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity text-xs"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                  <MinusCircle className="w-6 h-6" />
+                </button>
+                <span className="text-white font-bold w-6 text-center">
+                  {prod.stock}
+                </span>
+                <button
+                  onClick={() => updateStock(prod.id, 1)}
+                  className="p-1.5 text-zinc-400 hover:text-cyan-400 transition-colors"
+                >
+                  <PlusCircle className="w-6 h-6" />
+                </button>
               </div>
             </div>
           </div>
+        ))}
+      </div>
+    </div>
+  );
 
-          {/* SERVIÇOS */}
-          <div className="space-y-4">
-            <h2 className="text-xl font-bold text-zinc-800 uppercase tracking-tight">
-              ✂️ Serviços
-            </h2>
-            <form
-              onSubmit={handleAddService}
-              className="bg-white p-5 rounded-xl shadow-sm border border-zinc-200 space-y-3"
-            >
-              <div className="relative w-full h-40 bg-zinc-50 rounded-lg border-2 border-dashed border-zinc-300 flex items-center justify-center overflow-hidden hover:border-zinc-500 transition-colors cursor-pointer group">
-                {newServiceImage ? (
-                  <img
-                    src={newServiceImage}
-                    alt="Preview"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="text-center">
-                    <span className="text-2xl">📷</span>
-                    <p className="text-xs text-zinc-400 mt-1 uppercase font-bold">
-                      Toque para adicionar foto
-                    </p>
-                  </div>
-                )}
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleNewServiceImage}
-                  className="absolute inset-0 opacity-0 cursor-pointer"
-                />
-              </div>
-              <input
-                className="w-full border border-zinc-300 p-3 rounded-lg text-sm text-black outline-none focus:border-zinc-900"
-                placeholder="Nome do Serviço"
-                required
-                value={newServiceName}
-                onChange={(e) => setNewServiceName(e.target.value)}
-              />
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <span className="absolute left-3 top-3 text-zinc-400 text-sm">
-                    R$
-                  </span>
-                  <input
-                    className="w-full border border-zinc-300 p-3 pl-9 rounded-lg text-sm text-black outline-none focus:border-zinc-900"
-                    type="number"
-                    placeholder="0.00"
-                    required
-                    step="0.01"
-                    value={newServicePrice}
-                    onChange={(e) => setNewServicePrice(e.target.value)}
-                  />
-                </div>
-                <div className="relative w-24">
-                  <input
-                    className="w-full border border-zinc-300 p-3 rounded-lg text-sm text-black outline-none focus:border-zinc-900 text-center"
-                    type="number"
-                    placeholder="Min"
-                    required
-                    value={newServiceDuration}
-                    onChange={(e) => setNewServiceDuration(e.target.value)}
-                  />
-                  <span className="absolute right-2 top-3.5 text-[10px] text-zinc-400 uppercase font-bold pointer-events-none">
-                    Min
-                  </span>
-                </div>
-              </div>
-              <button
-                disabled={uploading}
-                className="w-full bg-zinc-900 text-white py-3 rounded-lg font-bold hover:bg-black uppercase tracking-wide text-sm shadow-md transition-transform active:scale-95"
-              >
-                {uploading ? "Salvando..." : "Cadastrar Serviço"}
-              </button>
-            </form>
-            <div className="bg-white rounded-xl shadow-sm border border-zinc-200 divide-y divide-zinc-100">
-              {services.map((s) => (
-                <div
-                  key={s.id}
-                  className="p-4 flex items-center gap-4 hover:bg-zinc-50 transition-colors relative group"
-                >
-                  <div className="w-14 h-14 bg-zinc-100 rounded-lg shrink-0 overflow-hidden border border-zinc-100">
-                    {s.image_url && (
-                      <img
-                        src={s.image_url}
-                        alt={s.name}
-                        className="w-full h-full object-cover"
-                      />
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-bold text-zinc-800">{s.name}</div>
-                    <div className="text-xs text-zinc-500 font-medium mt-1">
-                      R$ {s.price.toFixed(2)} • {s.duration} min
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => handleDeleteService(s.id)}
-                    className="w-8 h-8 flex items-center justify-center text-zinc-300 hover:text-red-500 transition-colors"
-                  >
-                    🗑️
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
+  const renderCaixa = () => (
+    <div className="animate-fade-in-up space-y-8 pb-10">
+      <div>
+        <h2 className="text-2xl font-extrabold text-white mb-1">
+          Caixa & Relatórios
+        </h2>
+        <p className="text-zinc-400 text-sm">
+          Controle financeiro e fechamento do dia.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-linear-to-br from-cyan-900/40 to-blue-900/20 border border-cyan-800/50 p-5 rounded-3xl relative overflow-hidden">
+          <DollarSign className="absolute -right-4 -bottom-4 w-24 h-24 text-cyan-500/10" />
+          <p className="text-cyan-400 text-xs font-bold uppercase tracking-wider mb-1">
+            Hoje
+          </p>
+          <p className="text-2xl md:text-3xl font-black text-white">
+            {formatCurrency(lucroDia)}
+          </p>
+        </div>
+        <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-3xl relative overflow-hidden">
+          <TrendingUp className="absolute -right-4 -bottom-4 w-24 h-24 text-zinc-700/20" />
+          <p className="text-zinc-500 text-xs font-bold uppercase tracking-wider mb-1">
+            Mês (Estimativa)
+          </p>
+          <p className="text-2xl md:text-3xl font-black text-white">
+            {formatCurrency(lucroMensal + lucroDia)}
+          </p>
         </div>
       </div>
 
-      {/* --- CORREÇÃO DO MODAL DE HORÁRIOS AQUI --- */}
-      {showHoursModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-          {/* Adicionado max-h-[90vh] e flex flex-col para travar altura e forçar scroll interno */}
-          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            {/* Cabeçalho Fixo */}
-            <div className="p-6 border-b flex justify-between items-center bg-white shrink-0 z-10">
-              <h2 className="text-xl font-bold text-zinc-900">
-                Configurar Horários
-              </h2>
-              <button
-                onClick={() => setShowHoursModal(false)}
-                className="w-8 h-8 rounded-full bg-zinc-100 hover:bg-red-100 text-zinc-500 hover:text-red-500 flex items-center justify-center text-lg"
+      <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl">
+        <h3 className="text-lg font-bold text-white mb-4">
+          Adicionar Venda Extra
+        </h3>
+        <form
+          onSubmit={handleAddVendaAvulsa}
+          className="flex flex-col md:flex-row gap-3"
+        >
+          <input
+            required
+            value={novaVendaDesc}
+            onChange={(e) => setNovaVendaDesc(e.target.value)}
+            type="text"
+            placeholder="O que foi vendido?"
+            className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:border-cyan-500 outline-none"
+          />
+          <input
+            required
+            value={novaVendaValor}
+            onChange={(e) => setNovaVendaValor(e.target.value)}
+            type="number"
+            step="0.01"
+            placeholder="Valor (R$)"
+            className="w-full md:w-32 bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:border-cyan-500 outline-none"
+          />
+          <button
+            type="submit"
+            className="bg-cyan-600 text-white font-bold px-6 py-3 rounded-xl hover:bg-cyan-500 transition-colors"
+          >
+            Adicionar
+          </button>
+        </form>
+        {vendasAvulsas.length > 0 && (
+          <div className="mt-4 space-y-2">
+            {vendasAvulsas.map((v) => (
+              <div
+                key={v.id}
+                className="flex justify-between items-center bg-zinc-950 p-3 rounded-xl border border-zinc-800"
               >
-                ✕
+                <span className="text-zinc-300 text-sm">
+                  <span className="text-zinc-500 mr-2">{v.time}</span>{" "}
+                  {v.description}
+                </span>
+                <span className="text-cyan-400 font-bold text-sm">
+                  {formatCurrency(v.price)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="bg-zinc-900/50 border border-zinc-800 p-6 rounded-3xl">
+        <h3 className="text-lg font-bold text-white mb-4">
+          Fechamento de Caixa
+        </h3>
+        <textarea
+          value={observacaoCaixa}
+          onChange={(e) => setObservacaoCaixa(e.target.value)}
+          placeholder="Observações do dia (Ex: Faltou luz por 1h)..."
+          className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:border-cyan-500 outline-none h-24 resize-none mb-4"
+        />
+        <button
+          onClick={() => setShowEmailPrompt(true)}
+          className="w-full bg-white text-zinc-950 font-black py-4 rounded-2xl flex items-center justify-center gap-2 hover:bg-zinc-200 transition-all"
+        >
+          <FileText className="w-5 h-5" /> Finalizar Dia e Enviar Relatório
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderPerfil = () => (
+    <div className="animate-fade-in-up space-y-8 pb-10">
+      <div>
+        <h2 className="text-2xl font-extrabold text-white mb-1">Meu Perfil</h2>
+        <p className="text-zinc-400 text-sm">
+          Personalize a página que seus clientes vão ver.
+        </p>
+      </div>
+
+      {/* INPUTS DE ARQUIVO OCULTOS */}
+      <input
+        type="file"
+        accept="image/*"
+        ref={logoInputRef}
+        className="hidden"
+        onChange={(e) => handleFileSelect(e, "logo")}
+      />
+      <input
+        type="file"
+        accept="image/*"
+        ref={portfolioInputRef}
+        className="hidden"
+        onChange={(e) => handleFileSelect(e, "portfolio")}
+      />
+
+      {/* COMPARTILHAR LINK */}
+      <div className="bg-linear-to-r from-cyan-900/20 to-zinc-900 border border-cyan-800/30 p-6 rounded-3xl">
+        <h3 className="text-lg font-bold text-white mb-2">
+          Link de Agendamento
+        </h3>
+        <p className="text-sm text-zinc-400 mb-4">
+          Compartilhe este link no seu WhatsApp ou Bio do Instagram para os
+          clientes agendarem horários sozinhos.
+        </p>
+        <div className="flex items-center gap-3">
+          <div className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 flex items-center gap-2 overflow-hidden">
+            <span className="text-zinc-500 font-medium">barbersaas.com/</span>
+            <span className="text-cyan-400 font-bold truncate">
+              {resolvedParams.slug}
+            </span>
+          </div>
+          <button
+            onClick={handleCopyLink}
+            className="bg-cyan-600 text-white p-3 rounded-xl hover:bg-cyan-500 transition-colors flex shrink-0 items-center justify-center"
+          >
+            <Copy className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+
+      {/* LOGO DA BARBEARIA */}
+      <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl flex items-center gap-6">
+        <div
+          onClick={() => logoInputRef.current?.click()}
+          className="w-24 h-24 bg-zinc-950 rounded-full border-2 border-dashed border-zinc-700 flex flex-col items-center justify-center text-zinc-500 hover:border-cyan-500 hover:text-cyan-500 transition-colors cursor-pointer overflow-hidden relative group"
+        >
+          {logoUrl ? (
+            <>
+              <img
+                src={logoUrl}
+                alt="Logo"
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <Camera className="w-6 h-6 text-white" />
+              </div>
+            </>
+          ) : (
+            <>
+              <Camera className="w-6 h-6 mb-1" />
+              <span className="text-[10px] font-bold uppercase tracking-wider">
+                Logo
+              </span>
+            </>
+          )}
+        </div>
+        <div>
+          <h3 className="text-lg font-bold text-white mb-1">Logo da Marca</h3>
+          <p className="text-sm text-zinc-400 mb-3">
+            Esta imagem vai aparecer em destaque na sua página de agendamentos.
+          </p>
+          <button
+            onClick={() => logoInputRef.current?.click()}
+            className="text-sm text-cyan-400 font-bold hover:text-cyan-300"
+          >
+            Alterar Imagem
+          </button>
+        </div>
+      </div>
+
+      {/* PORTFÓLIO DE FOTOS */}
+      <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl">
+        <div className="flex justify-between items-center mb-6">
+          <div>
+            <h3 className="text-lg font-bold text-white mb-1">
+              Portfólio de Cortes
+            </h3>
+            <p className="text-sm text-zinc-400">
+              Mostre seu talento para atrair mais agendamentos.
+            </p>
+          </div>
+          <button
+            onClick={() => portfolioInputRef.current?.click()}
+            className="bg-zinc-800 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-zinc-700 flex items-center gap-2 transition-colors border border-zinc-700"
+          >
+            <Plus className="w-4 h-4" /> Adicionar Foto
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          {portfolioPhotos.map((photo, i) => (
+            <div
+              key={i}
+              className="aspect-square bg-zinc-950 rounded-2xl border border-zinc-800 overflow-hidden group relative"
+            >
+              <img
+                src={photo}
+                alt="Portfólio"
+                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+              />
+              <button
+                onClick={() => handleDeletePhoto(i)}
+                className="absolute top-2 right-2 p-2 bg-black/50 text-white rounded-lg backdrop-blur-sm opacity-0 group-hover:opacity-100 hover:bg-red-500 transition-all z-10"
+                title="Excluir Foto"
+              >
+                <Trash2 className="w-4 h-4" />
               </button>
             </div>
-
-            {/* Corpo com Scroll (overflow-y-auto) */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-zinc-50 custom-scrollbar">
-              {DAYS_ORDER.map((day) => (
-                <div
-                  key={day}
-                  className={`flex flex-col p-4 rounded-xl border transition-all ${hoursConfig[day]?.active ? "bg-white border-zinc-300 shadow-sm" : "bg-zinc-100 border-transparent opacity-70"}`}
-                >
-                  <div className="flex justify-between items-center mb-3">
-                    <span className="font-bold text-zinc-900 uppercase tracking-wide text-sm">
-                      {DAYS_TRANSLATION[day]}
-                    </span>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="sr-only peer"
-                        checked={hoursConfig[day]?.active || false}
-                        onChange={(e) =>
-                          handleHourChange(day, "active", e.target.checked)
-                        }
-                      />
-                      <div className="w-11 h-6 bg-zinc-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
-                    </label>
-                  </div>
-
-                  {hoursConfig[day]?.active && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <label className="text-[10px] uppercase font-bold text-zinc-400 block tracking-wider">
-                          Funcionamento
-                        </label>
-                        <div className="grid grid-cols-2 gap-2">
-                          <input
-                            type="time"
-                            value={hoursConfig[day]?.open}
-                            onChange={(e) =>
-                              handleHourChange(day, "open", e.target.value)
-                            }
-                            className="w-full bg-zinc-50 border border-zinc-200 p-2 rounded text-sm text-center font-mono focus:border-black outline-none"
-                          />
-                          <input
-                            type="time"
-                            value={hoursConfig[day]?.close}
-                            onChange={(e) =>
-                              handleHourChange(day, "close", e.target.value)
-                            }
-                            className="w-full bg-zinc-50 border border-zinc-200 p-2 rounded text-sm text-center font-mono focus:border-black outline-none"
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] uppercase font-bold text-zinc-400 block tracking-wider">
-                          Intervalo (Opcional)
-                        </label>
-                        <div className="grid grid-cols-2 gap-2">
-                          <input
-                            type="time"
-                            value={hoursConfig[day]?.break_start || ""}
-                            onChange={(e) =>
-                              handleHourChange(
-                                day,
-                                "break_start",
-                                e.target.value,
-                              )
-                            }
-                            className="w-full bg-zinc-50 border border-zinc-200 p-2 rounded text-sm text-center font-mono focus:border-black outline-none"
-                          />
-                          <input
-                            type="time"
-                            value={hoursConfig[day]?.break_end || ""}
-                            onChange={(e) =>
-                              handleHourChange(day, "break_end", e.target.value)
-                            }
-                            className="w-full bg-zinc-50 border border-zinc-200 p-2 rounded text-sm text-center font-mono focus:border-black outline-none"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            {/* Rodapé Fixo */}
-            <div className="p-4 sm:p-6 border-t bg-white shrink-0">
-              <button
-                onClick={saveHours}
-                className="w-full bg-zinc-900 text-white py-4 rounded-xl font-bold text-lg hover:bg-black transition-transform active:scale-95 shadow-lg"
-              >
-                Salvar Configuração
-              </button>
-            </div>
+          ))}
+          <div
+            onClick={() => portfolioInputRef.current?.click()}
+            className="aspect-square bg-zinc-950 rounded-2xl border-2 border-dashed border-zinc-800 flex flex-col items-center justify-center text-zinc-500 hover:border-cyan-500 hover:text-cyan-500 transition-colors cursor-pointer"
+          >
+            <ImageIcon className="w-8 h-8 mb-2" />
+            <span className="text-xs font-bold">Nova Foto</span>
           </div>
         </div>
-      )}
+      </div>
+    </div>
+  );
+
+  const menuItens = [
+    { id: "agenda", icon: LayoutDashboard, label: "Agenda Pública" },
+    { id: "caixa", icon: DollarSign, label: "Caixa & Relatórios" },
+    { id: "servicos", icon: Scissors, label: "Meus Serviços" },
+    { id: "produtos", icon: ShoppingBag, label: "Estoque / Bar" },
+    { id: "perfil", icon: Settings, label: "Meu Perfil" },
+  ];
+
+  return (
+    <div className="flex h-screen bg-zinc-950 font-sans selection:bg-cyan-500/30 overflow-hidden relative">
+      {/* =========================================================
+          SISTEMA DE MODAIS FLUTUANTES 
+          ========================================================= */}
+      <AnimatePresence>
+        {/* MODAL: ENQUADRAMENTO (CROP) DE IMAGEM */}
+        {showCropModal && selectedFileUrl && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-120 flex items-center justify-center bg-black/90 backdrop-blur-sm px-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              className="bg-zinc-900 border border-zinc-800 p-8 rounded-3xl max-w-md w-full shadow-2xl relative text-center"
+            >
+              <button
+                onClick={() => {
+                  setShowCropModal(false);
+                  setSelectedFileUrl(null);
+                }}
+                className="absolute top-4 right-4 text-zinc-500 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <Crop className="w-8 h-8 text-cyan-500 mx-auto mb-4" />
+              <h2 className="text-2xl font-black text-white mb-2">
+                Ajustar Imagem
+              </h2>
+              <p className="text-zinc-400 text-sm mb-6">
+                Sua imagem será enquadrada e cortada neste formato exato (1:1).
+              </p>
+
+              {/* O Container de Visualização Quadrada */}
+              <div className="w-64 h-64 border-2 border-dashed border-cyan-500 rounded-2xl overflow-hidden relative mx-auto mb-6 bg-zinc-950 flex items-center justify-center shadow-inner">
+                <img
+                  src={selectedFileUrl}
+                  alt="Preview"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+
+              <button
+                onClick={handleConfirmCrop}
+                className="w-full bg-cyan-600 text-white font-bold py-4 rounded-xl hover:bg-cyan-500 transition-colors"
+              >
+                Confirmar Enquadramento
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* MODAL: NOVO SERVIÇO */}
+        {showNewServiceModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-100 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              className="bg-zinc-900 border border-zinc-800 p-8 rounded-3xl max-w-md w-full shadow-2xl relative"
+            >
+              <button
+                onClick={() => setShowNewServiceModal(false)}
+                className="absolute top-4 right-4 text-zinc-500 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <h2 className="text-2xl font-black text-white mb-6">
+                Cadastrar Serviço
+              </h2>
+              <form onSubmit={handleAddService} className="space-y-4">
+                <input
+                  required
+                  type="text"
+                  value={newServiceName}
+                  onChange={(e) => setNewServiceName(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white"
+                  placeholder="Nome do Serviço (Ex: Degradê Navalhado)"
+                />
+                <div className="flex gap-4">
+                  <div className="flex-1">
+                    <label className="block text-xs text-zinc-400 mb-1">
+                      Preço (R$)
+                    </label>
+                    <input
+                      required
+                      type="number"
+                      step="0.01"
+                      value={newServicePrice}
+                      onChange={(e) => setNewServicePrice(e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white"
+                      placeholder="45,00"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-xs text-zinc-400 mb-1">
+                      Duração (Minutos)
+                    </label>
+                    <input
+                      required
+                      type="number"
+                      step="5"
+                      value={newServiceDuration}
+                      onChange={(e) => setNewServiceDuration(e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white"
+                    />
+                  </div>
+                </div>
+
+                {/* CHECKBOX OPÇÃO DE OCULTAR PREÇO */}
+                <div className="pt-2">
+                  <label className="flex items-center gap-3 cursor-pointer bg-zinc-950 p-4 rounded-xl border border-zinc-800 hover:border-zinc-700 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={newServiceHidePrice}
+                      onChange={(e) => setNewServiceHidePrice(e.target.checked)}
+                      className="w-5 h-5 accent-cyan-500 bg-zinc-900 border-zinc-700 rounded"
+                    />
+                    <div>
+                      <span className="text-sm font-bold text-white flex items-center gap-2">
+                        Ocultar preço do cliente{" "}
+                        <EyeOff className="w-4 h-4 text-zinc-400" />
+                      </span>
+                      <span className="block text-xs text-zinc-500">
+                        Será exibido como "Sob Consulta".
+                      </span>
+                    </div>
+                  </label>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full bg-cyan-600 text-white font-bold py-4 rounded-xl hover:bg-cyan-500 mt-4"
+                >
+                  Salvar Serviço
+                </button>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* MODAL: NOVO PRODUTO */}
+        {showNewProductModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-100 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              className="bg-zinc-900 border border-zinc-800 p-8 rounded-3xl max-w-md w-full shadow-2xl relative"
+            >
+              <button
+                onClick={() => setShowNewProductModal(false)}
+                className="absolute top-4 right-4 text-zinc-500 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <h2 className="text-2xl font-black text-white mb-6">
+                Cadastrar Produto
+              </h2>
+              <form onSubmit={handleAddProduct} className="space-y-4">
+                <input
+                  required
+                  type="text"
+                  value={newProductName}
+                  onChange={(e) => setNewProductName(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white"
+                  placeholder="Nome (Ex: Cerveja Artesanal)"
+                />
+                <div className="flex gap-4">
+                  <div className="flex-1">
+                    <input
+                      required
+                      type="number"
+                      step="0.01"
+                      value={newProductPrice}
+                      onChange={(e) => setNewProductPrice(e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white"
+                      placeholder="Preço"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <input
+                      required
+                      type="number"
+                      value={newProductStock}
+                      onChange={(e) => setNewProductStock(e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white"
+                      placeholder="Estoque Inicial"
+                    />
+                  </div>
+                </div>
+                <button
+                  type="submit"
+                  className="w-full bg-cyan-600 text-white font-bold py-4 rounded-xl hover:bg-cyan-500 mt-4"
+                >
+                  Adicionar ao Bar
+                </button>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* MODAL DE E-MAIL (FECHAMENTO DE CAIXA) */}
+        {showEmailPrompt && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-100 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              className="bg-zinc-900 border border-zinc-800 p-8 rounded-3xl max-w-md w-full shadow-2xl relative"
+            >
+              <button
+                onClick={() => setShowEmailPrompt(false)}
+                className="absolute top-4 right-4 text-zinc-500 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <div className="w-16 h-16 bg-cyan-500/10 rounded-2xl flex items-center justify-center mb-6 border border-cyan-500/20">
+                <Mail className="w-8 h-8 text-cyan-500" />
+              </div>
+              <h2 className="text-2xl font-black text-white mb-2">
+                Testando o envio?
+              </h2>
+              <p className="text-zinc-400 text-sm mb-6">
+                Simularemos o envio do relatório de{" "}
+                <strong className="text-cyan-400">
+                  {formatCurrency(lucroDia)}
+                </strong>{" "}
+                para você.
+              </p>
+              <form onSubmit={handleConfirmarFechamento} className="space-y-4">
+                <input
+                  type="email"
+                  required
+                  placeholder="seu.email@exemplo.com"
+                  value={testerEmail}
+                  onChange={(e) => setTesterEmail(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:border-cyan-500 outline-none"
+                />
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handleConfirmarFechamento()}
+                    disabled={isSendingEmail}
+                    className="px-6 bg-zinc-800 text-white font-bold py-3 rounded-xl hover:bg-zinc-700"
+                  >
+                    Pular
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSendingEmail}
+                    className="flex-1 bg-cyan-600 text-white font-bold py-3 rounded-xl hover:bg-cyan-500 flex items-center justify-center gap-2"
+                  >
+                    {isSendingEmail ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Send className="w-5 h-5" />
+                    )}{" "}
+                    {isSendingEmail ? "Enviando..." : "Enviar Relatório"}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* MODAL SUCESSO DE CAIXA */}
+        {showClosingSuccess && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-100 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              className="bg-zinc-900 border border-zinc-800 p-8 rounded-3xl max-w-sm w-full text-center shadow-2xl"
+            >
+              <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center mx-auto mb-6">
+                <CheckCircle2 className="w-10 h-10 text-green-500" />
+              </div>
+              <h2 className="text-2xl font-black text-white mb-2">
+                Caixa Fechado!
+              </h2>
+              <p className="text-zinc-400 text-sm mb-6">
+                Enviado para:{" "}
+                <span className="block text-cyan-400 font-bold mt-2 text-base">
+                  {testerEmail || "WhatsApp do Dono"}
+                </span>
+              </p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {/* ========================================================= */}
+
+      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-200 h-75 bg-cyan-900/10 blur-[150px] pointer-events-none z-0"></div>
+
+      {/* --- SIDEBAR DESKTOP --- */}
+      <aside className="hidden md:flex w-72 bg-zinc-950/80 backdrop-blur-xl border-r border-zinc-900 z-10 shrink-0 flex-col">
+        <div className="p-6">
+          <div className="flex items-center gap-3 mb-8">
+            <div className="w-10 h-10 bg-cyan-600/20 flex items-center justify-center rounded-xl border border-cyan-500/30 text-cyan-500">
+              <Scissors className="w-5 h-5" />
+            </div>
+            <div>
+              <h1 className="text-sm font-bold text-white uppercase tracking-wider">
+                {resolvedParams.slug}
+              </h1>
+              <p className="text-xs text-cyan-500 font-medium">
+                Modo Demonstração
+              </p>
+            </div>
+          </div>
+          <nav className="space-y-2">
+            {menuItens.map((item) => {
+              const Icon = item.icon;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveTab(item.id)}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all font-semibold text-sm ${activeTab === item.id ? "bg-cyan-600/10 text-cyan-400 border border-cyan-500/20" : "text-zinc-400 hover:bg-zinc-900 hover:text-white border border-transparent"}`}
+                >
+                  <Icon className="w-5 h-5" /> {item.label}
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+        <div className="mt-auto p-6 border-t border-zinc-900">
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-4 py-3 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-2xl transition-all font-semibold text-sm"
+          >
+            <LogOut className="w-5 h-5" /> Sair
+          </button>
+        </div>
+      </aside>
+
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+            />
+            <motion.aside
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ type: "spring", bounce: 0, duration: 0.4 }}
+              className="md:hidden fixed inset-y-0 left-0 w-3/4 max-w-sm bg-zinc-950 border-r border-zinc-900 z-50 flex flex-col"
+            >
+              <div className="p-6">
+                <div className="flex items-center gap-3 mb-8">
+                  <div className="w-10 h-10 bg-cyan-600/20 flex items-center justify-center rounded-xl border border-cyan-500/30 text-cyan-500">
+                    <Scissors className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h1 className="text-sm font-bold text-white uppercase tracking-wider">
+                      {resolvedParams.slug}
+                    </h1>
+                  </div>
+                </div>
+                <nav className="space-y-2">
+                  {menuItens.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => {
+                          setActiveTab(item.id);
+                          setIsMobileMenuOpen(false);
+                        }}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all font-semibold text-sm ${activeTab === item.id ? "bg-cyan-600/10 text-cyan-400 border border-cyan-500/20" : "text-zinc-400 hover:bg-zinc-900 hover:text-white"}`}
+                      >
+                        <Icon className="w-5 h-5" /> {item.label}
+                      </button>
+                    );
+                  })}
+                </nav>
+              </div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      <div className="flex-1 flex flex-col min-w-0 z-10">
+        <header className="md:hidden h-20 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-900 flex items-center justify-between px-6 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-cyan-600/20 flex items-center justify-center rounded-xl border border-cyan-500/30 text-cyan-500">
+              <Scissors className="w-5 h-5" />
+            </div>
+            <h1 className="text-sm font-bold text-white uppercase tracking-wider truncate w-32">
+              {resolvedParams.slug}
+            </h1>
+          </div>
+          <button
+            onClick={() => setIsMobileMenuOpen(true)}
+            className="p-2.5 bg-zinc-900 rounded-xl border border-zinc-800 text-white"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+        </header>
+
+        <main className="flex-1 overflow-y-auto p-6 md:p-10 scroll-smooth">
+          <div className="max-w-3xl mx-auto pb-20 md:pb-0">
+            {activeTab === "agenda" && renderAgenda()}
+            {activeTab === "caixa" && renderCaixa()}
+            {activeTab === "servicos" && renderServicos()}
+            {activeTab === "produtos" && renderProducts()}
+            {activeTab === "perfil" && renderPerfil()}
+          </div>
+        </main>
+      </div>
     </div>
   );
 }
