@@ -59,12 +59,11 @@ export default async function Home() {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
             </span>
-            Lançamento Oficial em Pelotas
+            Lançamento exclusivo para barbeiros visionários!
           </div>
 
           <h1 className="text-4xl md:text-7xl font-extrabold text-white mb-8 tracking-tight leading-[1.15]">
-            A gestão da sua barbearia,
-            <br className="hidden md:block" />
+            O futuro da gestão de barbearias,
             <span className="text-transparent bg-clip-text bg-linear-to-r from-cyan-400 to-blue-500">
               <br />
               NA PALMA DA SUA MÃO.

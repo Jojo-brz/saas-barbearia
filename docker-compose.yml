@@ -1,0 +1,18 @@
+version: "3.8"
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: barbersaas_backend
+    restart: always # Se o servidor da Hostinger reiniciar, o backend volta sozinho
+    ports:
+      - "8000:8000"
+    volumes:
+      # MAPEAMENTO DE VOLUMES: ISSO SALVA SUA VIDA!
+      # Garante que o banco de dados e as fotos não sumam quando o container atualizar
+      - ./backend_data:/app/data
+      - ./backend/uploads:/app/uploads
+    environment:
+      - TZ=America/Sao_Paulo # Mantém o fuso horário correto para os agendamentos

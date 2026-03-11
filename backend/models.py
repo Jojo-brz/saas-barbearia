@@ -29,19 +29,27 @@ class Barbershop(SQLModel, table=True):
     hours_config: str = Field(default=DEFAULT_HOURS)
     logo_url: Optional[str] = None 
     address: Optional[str] = None
+    # --- NOVOS CAMPOS ADICIONADOS ---
+    address: Optional[str] = None
+    description: Optional[str] = None
+    instagram: Optional[str] = None
 
     services: List["Service"] = Relationship(back_populates="barbershop")
-    bookings: List["Booking"] = Relationship(back_populates="barbershop")
     barbers: List["Barber"] = Relationship(back_populates="barbershop")
+    bookings: List["Booking"] = Relationship(back_populates="barbershop")
     cash_entries: List["CashEntry"] = Relationship(back_populates="barbershop")
 
 class Barber(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
     photo_url: Optional[str] = None
+    
+    # --- NOVOS CAMPOS ---
+    role: str = Field(default="BARBER") # Pode ser "OWNER" (Dono) ou "BARBER" (Equipe)
+    pin: Optional[str] = None # Senha de 4 dígitos para ações rápidas no PDV
+    
     barbershop_id: int = Field(foreign_key="barbershop.id")
-    barbershop: Optional[Barbershop] = Relationship(back_populates="barbers")
-    bookings: List["Booking"] = Relationship(back_populates="barber")
+    barbershop: "Barbershop" = Relationship(back_populates="barbers")
 
 class ServiceBase(SQLModel):
     name: str

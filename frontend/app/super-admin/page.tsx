@@ -3,7 +3,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import toast from "react-hot-toast"; // <--- IMPORTAR
+import toast from "react-hot-toast";
 
 interface Barbershop {
   id: number;
@@ -18,11 +18,13 @@ export default function SuperAdminPanel() {
   const [shops, setShops] = useState<Barbershop[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Form Criar
+  // Form Criar (Agora com CEO)
   const [newName, setNewName] = useState("");
   const [newSlug, setNewSlug] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [newCeoName, setNewCeoName] = useState(""); // <-- NOVO
+  const [newCeoPin, setNewCeoPin] = useState(""); // <-- NOVO
 
   // Form Editar
   const [editingShop, setEditingShop] = useState<Barbershop | null>(null);
@@ -32,6 +34,7 @@ export default function SuperAdminPanel() {
   const [editPassword, setEditPassword] = useState("");
 
   const getToken = () => localStorage.getItem("barber_token");
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
   useEffect(() => {
     if (localStorage.getItem("barber_role") !== "admin") {
@@ -44,7 +47,7 @@ export default function SuperAdminPanel() {
 
   const fetchShops = async () => {
     try {
-      const res = await fetch("http://127.0.0.1:8000/admin/shops", {
+      const res = await fetch(`${API_URL}/admin/shops`, {
         headers: { Authorization: `Bearer ${getToken()}` },
       });
       if (res.ok) setShops(await res.json());
@@ -56,7 +59,7 @@ export default function SuperAdminPanel() {
 
   const handleCreateShop = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await fetch("http://127.0.0.1:8000/barbershops/", {
+    const res = await fetch(`${API_URL}/barbershops/`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -67,18 +70,22 @@ export default function SuperAdminPanel() {
         slug: newSlug.toLowerCase().replace(/\s/g, "-"),
         email: newEmail,
         password: newPassword,
+        ceo_name: newCeoName, // <-- Enviando CEO para o backend
+        ceo_pin: newCeoPin, // <-- Enviando PIN para o backend
       }),
     });
     if (res.ok) {
-      toast.success("Barbearia criada com sucesso!"); // <---
+      toast.success("Barbearia e CEO criados com sucesso!");
       setNewName("");
       setNewSlug("");
       setNewEmail("");
       setNewPassword("");
+      setNewCeoName(""); // <-- Limpando
+      setNewCeoPin(""); // <-- Limpando
       fetchShops();
     } else {
       const err = await res.json();
-      toast.error("Erro: " + (err.detail || "Falha ao criar")); // <---
+      toast.error("Erro: " + (err.detail || "Falha ao criar"));
     }
   };
 
@@ -97,30 +104,27 @@ export default function SuperAdminPanel() {
     const body: any = { name: editName, slug: editSlug, email: editEmail };
     if (editPassword) body.password = editPassword;
 
-    const res = await fetch(
-      `http://127.0.0.1:8000/admin/barbershops/${editingShop.id}`,
-      {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${getToken()}`,
-        },
-        body: JSON.stringify(body),
+    const res = await fetch(`${API_URL}/admin/barbershops/${editingShop.id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getToken()}`,
       },
-    );
+      body: JSON.stringify(body),
+    });
 
     if (res.ok) {
-      toast.success("Barbearia atualizada!"); // <---
+      toast.success("Barbearia atualizada!");
       setEditingShop(null);
       fetchShops();
     } else {
       const err = await res.json();
-      toast.error("Erro: " + (err.detail || "Falha ao atualizar")); // <---
+      toast.error("Erro: " + (err.detail || "Falha ao atualizar"));
     }
   };
 
   const toggleStatus = async (id: number) => {
-    await fetch(`http://127.0.0.1:8000/admin/toggle_status/${id}`, {
+    await fetch(`${API_URL}/admin/toggle_status/${id}`, {
       method: "POST",
       headers: { Authorization: `Bearer ${getToken()}` },
     });
@@ -130,7 +134,7 @@ export default function SuperAdminPanel() {
 
   const deleteShop = async (id: number) => {
     if (confirm("Tem certeza? Essa ação é irreversível.")) {
-      await fetch(`http://127.0.0.1:8000/admin/barbershops/${id}`, {
+      await fetch(`${API_URL}/admin/barbershops/${id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${getToken()}` },
       });
@@ -152,12 +156,7 @@ export default function SuperAdminPanel() {
     );
 
   return (
-    // ... (O JSX do retorno mantém-se IDÊNTICO ao anterior,
-    // pois só mudamos a lógica das funções acima)
-    // Vou omitir o JSX aqui para economizar espaço,
-    // basta manter o JSX que você já tem no arquivo super-admin/page.tsx
     <div className="min-h-screen bg-zinc-950 text-white p-8 font-sans">
-      {/* ... (Seu JSX existente) ... */}
       <div className="max-w-6xl mx-auto">
         <div className="flex justify-between items-center mb-10 border-b border-zinc-800 pb-4">
           <h1 className="text-3xl font-bold text-yellow-500 uppercase tracking-widest">
@@ -180,21 +179,21 @@ export default function SuperAdminPanel() {
             <form onSubmit={handleCreateShop} className="space-y-4">
               <input
                 className="w-full bg-zinc-800 p-3 rounded text-white border border-zinc-700 focus:border-white outline-none placeholder-zinc-500"
-                placeholder="Nome"
+                placeholder="Nome da Barbearia"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 required
               />
               <input
                 className="w-full bg-zinc-800 p-3 rounded text-white border border-zinc-700 focus:border-white outline-none placeholder-zinc-500"
-                placeholder="Slug (URL)"
+                placeholder="Slug (Ex: barbearia-vintage)"
                 value={newSlug}
                 onChange={(e) => setNewSlug(e.target.value)}
                 required
               />
               <input
                 className="w-full bg-zinc-800 p-3 rounded text-white border border-zinc-700 focus:border-white outline-none placeholder-zinc-500"
-                placeholder="Email"
+                placeholder="Email de Login"
                 type="email"
                 value={newEmail}
                 onChange={(e) => setNewEmail(e.target.value)}
@@ -202,11 +201,39 @@ export default function SuperAdminPanel() {
               />
               <input
                 className="w-full bg-zinc-800 p-3 rounded text-white border border-zinc-700 focus:border-white outline-none placeholder-zinc-500"
-                placeholder="Senha"
+                placeholder="Senha de Login"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 required
               />
+
+              {/* === NOVOS CAMPOS DO CEO === */}
+              <div className="border-t border-zinc-800 pt-4 mt-2 mb-2">
+                <p className="text-xs text-zinc-400 font-bold uppercase mb-3">
+                  Dados do Dono (CEO)
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <input
+                    className="w-full bg-zinc-800 p-3 rounded text-white border border-zinc-700 focus:border-white outline-none placeholder-zinc-500"
+                    placeholder="Nome"
+                    value={newCeoName}
+                    onChange={(e) => setNewCeoName(e.target.value)}
+                    required
+                  />
+                  <input
+                    className="w-full bg-zinc-800 p-3 rounded text-white border border-zinc-700 focus:border-white outline-none placeholder-zinc-500 text-center tracking-widest"
+                    placeholder="PIN (4 dig)"
+                    type="password"
+                    maxLength={4}
+                    value={newCeoPin}
+                    onChange={(e) =>
+                      setNewCeoPin(e.target.value.replace(/\D/g, ""))
+                    }
+                    required
+                  />
+                </div>
+              </div>
+
               <button className="w-full bg-green-600 py-3 rounded font-bold hover:bg-green-500 uppercase tracking-wide text-sm shadow-md transition-all hover:scale-[1.02]">
                 Cadastrar
               </button>

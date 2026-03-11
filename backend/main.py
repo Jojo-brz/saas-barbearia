@@ -51,6 +51,18 @@ def create_access_token(data: dict, role: str, expires_delta: Optional[timedelta
     return encoded_jwt
 
 # --- MODELOS DE ENTRADA (PYDANTIC) ---
+class ShopProfileUpdate(BaseModel):
+    description: Optional[str] = None
+    address: Optional[str] = None
+    instagram: Optional[str] = None
+
+class ShopCreateWithCEO(BaseModel):
+    name: str
+    slug: str
+    email: str
+    password: str
+    ceo_name: str
+    ceo_pin: str
 
 class ShopUpdateAdmin(BaseModel):
     name: Optional[str] = None
@@ -138,32 +150,6 @@ async def get_current_super_admin(token: str = Depends(oauth2_scheme), session: 
 def home():
     return {"message": "API BarberSaaS está Online! 🚀 Acesse /docs para ver a documentação."}
 
-# --- ROTA DE LIMPEZA DIÁRIA (NOVO) ---
-@app.delete("/cleanup/")
-def cleanup_old_data(key: str, session: Session = Depends(get_session)):
-    """
-    Limpa agendamentos e entradas de caixa ANTERIORES a hoje.
-    Protegido por uma chave secreta na URL (key).
-    """
-    # Verifica se a chave passada na URL é a mesma do .env
-    if key != SECRET_KEY:
-        raise HTTPException(status_code=403, detail="Chave de limpeza inválida")
-    
-    today_str = date.today().isoformat() # Ex: "2024-02-15"
-    
-    # 1. Deletar Agendamentos Antigos (Data menor que hoje)
-    # A string de data ISO funciona bem com comparações de string (ex: "2024-01-01" < "2024-02-15")
-    statement_bookings = delete(Booking).where(Booking.date_time < today_str)
-    session.exec(statement_bookings)
-    
-    # 2. Deletar Caixa Antigo
-    statement_cash = delete(CashEntry).where(CashEntry.date < today_str)
-    session.exec(statement_cash)
-    
-    session.commit()
-    
-    return {"message": "Limpeza concluída! Dados anteriores a hoje foram removidos."}
-
 # --- LOGIN UNIFICADO ---
 
 @app.post("/token")
@@ -187,15 +173,36 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
 
 # --- ROTAS DO SUPER ADMIN (PROTEGIDAS) ---
 
-@app.post("/barbershops/", response_model=Barbershop)
-def create_barbershop(barbershop: Barbershop, session: Session = Depends(get_session), admin: SuperAdmin = Depends(get_current_super_admin)):
-    if session.exec(select(Barbershop).where(Barbershop.email == barbershop.email)).first(): raise HTTPException(400, "Email já existe")
-    if session.exec(select(Barbershop).where(Barbershop.slug == barbershop.slug)).first(): raise HTTPException(400, "Slug já existe")
-    barbershop.password = get_password_hash(barbershop.password)
-    session.add(barbershop)
+@app.post("/barbershops/")
+def create_shop_with_ceo(data: ShopCreateWithCEO, session: Session = Depends(get_session)):
+    # 1. Verifica duplicidades
+    if session.exec(select(Barbershop).where(Barbershop.email == data.email)).first():
+        raise HTTPException(400, "Email já cadastrado")
+    if session.exec(select(Barbershop).where(Barbershop.slug == data.slug)).first():
+        raise HTTPException(400, "Slug já está em uso")
+        
+    # 2. Cria a Empresa (Tenant)
+    shop = Barbershop(
+        name=data.name,
+        slug=data.slug,
+        email=data.email,
+        password=get_password_hash(data.password)
+    )
+    session.add(shop)
     session.commit()
-    session.refresh(barbershop)
-    return barbershop
+    session.refresh(shop)
+    
+    # 3. Cria o Perfil do CEO (Dono) atrelado a essa empresa
+    ceo = Barber(
+        name=data.ceo_name,
+        role="OWNER",
+        pin=data.ceo_pin,
+        barbershop_id=shop.id
+    )
+    session.add(ceo)
+    session.commit()
+    
+    return {"message": "Barbearia e CEO criados com sucesso!", "shop_id": shop.id}
 
 @app.get("/admin/shops", response_model=List[Barbershop])
 def list_all_shops(admin: SuperAdmin = Depends(get_current_super_admin), session: Session = Depends(get_session)):
@@ -248,6 +255,24 @@ def update_barbershop_admin(shop_id: int, data: ShopUpdateAdmin, session: Sessio
     return shop
 
 # --- ROTAS PÚBLICAS (Home e Agendamento) ---
+@app.put("/api/barbershops/{shop_id}/profile")
+def update_shop_profile(shop_id: int, data: ShopProfileUpdate, session: Session = Depends(get_session)):
+    shop = session.get(Barbershop, shop_id)
+    if not shop:
+        raise HTTPException(status_code=404, detail="Barbearia não encontrada")
+    
+    # Atualiza apenas os campos que foram enviados do Frontend
+    if data.description is not None:
+        shop.description = data.description
+    if data.address is not None:
+        shop.address = data.address
+    if data.instagram is not None:
+        shop.instagram = data.instagram
+        
+    session.add(shop)
+    session.commit()
+    session.refresh(shop)
+    return {"message": "Perfil atualizado com sucesso!", "shop": shop}
 
 @app.get("/barbershops/", response_model=List[Barbershop])
 def read_barbershops_public(session: Session = Depends(get_session)):
