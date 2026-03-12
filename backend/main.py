@@ -87,6 +87,15 @@ class HoursUpdate(BaseModel):
 class LogoUpdate(BaseModel):
     logo_url: str
 
+class AdminBarberCreate(BaseModel):
+    name: str
+    role: str
+    pin: str
+    barbershop_id: int
+
+class AdminBarberUpdate(BaseModel):
+    role: Optional[str] = None
+
 # --- STARTUP AUTOMÁTICO DO SUPER ADMIN ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -253,6 +262,46 @@ def update_barbershop_admin(shop_id: int, data: ShopUpdateAdmin, session: Sessio
     session.commit()
     session.refresh(shop)
     return shop
+
+@app.post("/admin/barbers/")
+def admin_create_barber(data: AdminBarberCreate, session: Session = Depends(get_session), admin: SuperAdmin = Depends(get_current_super_admin)):
+    shop = session.get(Barbershop, data.barbershop_id)
+    if not shop: 
+        raise HTTPException(404, "Barbearia não encontrada")
+    
+    barber = Barber(
+        name=data.name, 
+        role=data.role, 
+        pin=data.pin, 
+        barbershop_id=data.barbershop_id
+    )
+    session.add(barber)
+    session.commit()
+    session.refresh(barber)
+    return {"message": "Profissional adicionado com sucesso", "barber": barber}
+
+@app.delete("/admin/barbers/{barber_id}")
+def admin_delete_barber(barber_id: int, session: Session = Depends(get_session), admin: SuperAdmin = Depends(get_current_super_admin)):
+    barber = session.get(Barber, barber_id)
+    if not barber: 
+        raise HTTPException(404, "Profissional não encontrado")
+    session.delete(barber)
+    session.commit()
+    return {"ok": True}
+
+@app.put("/admin/barbers/{barber_id}")
+def admin_update_barber_role(barber_id: int, data: AdminBarberUpdate, session: Session = Depends(get_session), admin: SuperAdmin = Depends(get_current_super_admin)):
+    barber = session.get(Barber, barber_id)
+    if not barber: 
+        raise HTTPException(404, "Profissional não encontrado")
+    
+    if data.role:
+        barber.role = data.role
+    
+    session.add(barber)
+    session.commit()
+    session.refresh(barber)
+    return barber
 
 # --- ROTAS PÚBLICAS (Home e Agendamento) ---
 @app.put("/api/barbershops/{shop_id}/profile")

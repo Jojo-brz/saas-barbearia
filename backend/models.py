@@ -28,7 +28,6 @@ class Barbershop(SQLModel, table=True):
     is_active: bool = Field(default=True)
     hours_config: str = Field(default=DEFAULT_HOURS)
     logo_url: Optional[str] = None 
-    address: Optional[str] = None
     # --- NOVOS CAMPOS ADICIONADOS ---
     address: Optional[str] = None
     description: Optional[str] = None
@@ -50,6 +49,8 @@ class Barber(SQLModel, table=True):
     
     barbershop_id: int = Field(foreign_key="barbershop.id")
     barbershop: "Barbershop" = Relationship(back_populates="barbers")
+    bookings: List["Booking"] = Relationship(back_populates="barber")
+    bookings: List["Booking"] = Relationship(back_populates="barber")
 
 class ServiceBase(SQLModel):
     name: str

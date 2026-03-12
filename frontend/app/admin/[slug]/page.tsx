@@ -28,9 +28,8 @@ import {
   Edit2,
   PencilRuler,
   Clock,
+  Lock,
 } from "lucide-react";
-import {} from // Ícones novos adicionados
-"lucide-react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 
@@ -42,7 +41,6 @@ interface LoggedUser {
   name: string;
   role: Role;
 }
-
 interface Appointment {
   id: string;
   clientName: string;
@@ -78,79 +76,21 @@ interface TeamMember {
   name: string;
   role: Role;
   pin: string;
+  photo_url?: string;
+}
+interface Barbershop {
+  id: string;
+  name: string;
+  slug: string;
+  owner_id: string;
+  services: Service[];
+  team: TeamMember[];
 }
 
-// --- DADOS INICIAIS (MOCK) ---
-const INITIAL_APPOINTMENTS: Appointment[] = [
-  {
-    id: "1",
-    clientName: "Carlos Eduardo",
-    phone: "53991234567",
-    service: "Corte Degradê",
-    time: "14:00",
-    price: 35,
-    duration: 45,
-    barberId: "b1",
-  },
-  {
-    id: "2",
-    clientName: "Lucas Ferreira",
-    phone: "53988881122",
-    service: "Corte + Barba",
-    time: "15:30",
-    price: 55,
-    duration: 60,
-    barberId: "b2",
-  },
-  {
-    id: "3",
-    clientName: "João Silva",
-    phone: "53988881122",
-    service: "Corte + Barba",
-    time: "15:30",
-    price: 55,
-    duration: 60,
-    barberId: "b3",
-  },
-  {
-    id: "4",
-    clientName: "Henrique Santos",
-    phone: "53988881122",
-    service: "Corte + Barba",
-    time: "15:30",
-    price: 55,
-    duration: 60,
-    barberId: "b3",
-  },
-];
-
-const INITIAL_SERVICES: Service[] = [
-  {
-    id: "s1",
-    name: "Corte Degradê",
-    price: 35,
-    duration: 45,
-    hidePrice: false,
-  },
-  {
-    id: "s2",
-    name: "Corte + Barba",
-    price: 55,
-    duration: 60,
-    hidePrice: false,
-  },
-  { id: "s3", name: "Platinado", price: 120, duration: 120, hidePrice: true },
-];
-
+// O ÚNICO MOCK QUE SOBROU (Produtos - pois ainda não tem backend)
 const INITIAL_PRODUCTS: Product[] = [
   { id: "p1", name: "Pomada Efeito Matte", price: 45, stock: 12 },
   { id: "p2", name: "Cerveja Long Neck", price: 12, stock: 24 },
-];
-
-const INITIAL_TEAM: TeamMember[] = [
-  { id: "b1", name: "CEO (Você)", role: "OWNER", pin: "1234" },
-  { id: "b2", name: "Otavio Mesquita", role: "BARBER", pin: "3020" },
-  { id: "b3", name: "Tom Holland", role: "BARBER", pin: "5678" },
 ];
 
 export default function AdminDashboard({
@@ -165,19 +105,27 @@ export default function AdminDashboard({
   const logoInputRef = useRef<HTMLInputElement>(null);
   const portfolioInputRef = useRef<HTMLInputElement>(null);
 
-  // =========================================================================
-  // SIMULADOR DE LOGIN (Troque 'OWNER' para 'BARBER' para testar a visão do funcionário)
-  // =========================================================================
-  const [currentUser, setCurrentUser] = useState<LoggedUser>({
-    id: "b1",
-    name: "CEO (Você)",
-    role: "OWNER", // Mude para "BARBER" e o id para "b2" depois para ver a mágica acontecer!
-  });
+  // Estados de Dados da Barbearia (Vêm do Backend de verdade!)
+  const [barbershop, setBarbershop] = useState<Barbershop | null>(null);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+  const [team, setTeam] = useState<TeamMember[]>([]);
+  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
 
-  // Estados Gerais
+  // Login e Segurança
+  const [currentUser, setCurrentUser] = useState<TeamMember | null>(null);
+  const [isLocked, setIsLocked] = useState(true); // O sistema começa bloqueado!
+  const [selectedBarberForPin, setSelectedBarberForPin] =
+    useState<TeamMember | null>(null);
+  const [pinInput, setPinInput] = useState("");
+  const [shopId, setShopId] = useState<number | null>(null);
+
+  // Estados Gerais e Layout
   const [activeTab, setActiveTab] = useState("agenda");
   const [isLoading, setIsLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
+
+  // Configurações e Caixa (mantidos do seu design incrível)
   const [diasAbertos, setDiasAbertos] = useState([
     "Segunda",
     "Terça",
@@ -195,24 +143,19 @@ export default function AdminDashboard({
     "Sexta",
     "Sábado",
   ];
-
-  // Estados de Dados
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [services, setServices] = useState<Service[]>(INITIAL_SERVICES);
-  const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
-  const [team, setTeam] = useState<TeamMember[]>(INITIAL_TEAM);
-  const [sobreBarbearia, setSobreBarbearia] = useState(
-    "Somos uma barbearia focada em entregar a melhor experiência, unindo o clássico ao moderno...",
-  );
   const [horarioAbertura, setHorarioAbertura] = useState("09:00");
   const [horarioFechamento, setHorarioFechamento] = useState("20:00");
   const [intervaloInicio, setIntervaloInicio] = useState("12:00");
   const [intervaloFim, setIntervaloFim] = useState("13:00");
+  const [sobreBarbearia, setSobreBarbearia] = useState(
+    "Somos uma barbearia focada em entregar a melhor experiência...",
+  );
   const [endereco, setEndereco] = useState(
     "Av. Bento Gonçalves, 123 - Centro, Pelotas - RS",
   );
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [portfolioPhotos, setPortfolioPhotos] = useState<string[]>([]);
 
-  // Estados Financeiros
   const [lucroMensal, setLucroMensal] = useState<number>(0);
   const [lucroDia, setLucroDia] = useState<number>(0);
   const [vendasAvulsas, setVendasAvulsas] = useState<any[]>([]);
@@ -224,55 +167,138 @@ export default function AdminDashboard({
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [testerEmail, setTesterEmail] = useState("");
 
-  // Modais de Cadastro
   const [showNewServiceModal, setShowNewServiceModal] = useState(false);
   const [newServiceName, setNewServiceName] = useState("");
   const [newServicePrice, setNewServicePrice] = useState("");
   const [newServiceDuration, setNewServiceDuration] = useState("30");
   const [newServiceHidePrice, setNewServiceHidePrice] = useState(false);
 
-  // Estados de Imagem (Perfil)
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
-  const [portfolioPhotos, setPortfolioPhotos] = useState<string[]>([
-    "https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=500&q=80",
-    "https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=500&q=80",
-  ]);
+  // =========================================================================
+  // SISTEMA DE ACESSO POR PIN
+  // =========================================================================
+  const handleUnlock = (e?: any) => {
+    if (e && e.preventDefault) e.preventDefault();
 
+    if (!selectedBarberForPin) return;
+
+    // Forçamos ambos a serem texto e removemos espaços
+    const inputLimpo = String(pinInput).trim();
+    const pinRealLimpo = String(selectedBarberForPin.pin).trim();
+
+    console.log("PIN Digitado:", inputLimpo, "| PIN do Banco:", pinRealLimpo);
+
+    if (inputLimpo === pinRealLimpo) {
+      setCurrentUser(selectedBarberForPin);
+      setIsLocked(false);
+      setPinInput("");
+      toast.success(`Bem-vindo, ${selectedBarberForPin.name}!`);
+    } else {
+      toast.error("PIN Incorreto!");
+      setPinInput("");
+    }
+  };
+
+  // =========================================================================
+  // O CORAÇÃO DO SISTEMA (CONEXÃO E SEGURANÇA)
+  // =========================================================================
   useEffect(() => {
-    setTimeout(() => {
-      // Se for Barbeiro, carrega só a agenda dele. Se for CEO, carrega tudo.
-      if (currentUser.role === "BARBER") {
-        setAppointments(
-          INITIAL_APPOINTMENTS.filter((app) => app.barberId === currentUser.id),
+    const token = localStorage.getItem("barber_token");
+    const role = localStorage.getItem("barber_role");
+
+    // Bloqueia quem não fez login
+    if (!token) {
+      router.push("/login");
+      return;
+    }
+
+    // =========================================================================
+    // SISTEMA DE ACESSO POR PIN
+    // =========================================================================
+
+    // Puxa tudo do banco e atualiza a tela
+    const fetchDashboardData = async () => {
+      try {
+        const resShop = await fetch(
+          `http://127.0.0.1:8000/barbershops/${resolvedParams.slug}`,
         );
-      } else {
-        setAppointments(INITIAL_APPOINTMENTS);
+        if (!resShop.ok) throw new Error("Barbearia não encontrada");
+        const shopData = await resShop.json();
+
+        setBarbershop(shopData);
+        setShopId(shopData.id);
+
+        const resTeam = await fetch(
+          `http://127.0.0.1:8000/barbershops/${resolvedParams.slug}/barbers`,
+        );
+        if (resTeam.ok) setTeam(await resTeam.json());
+
+        const resServices = await fetch(
+          `http://127.0.0.1:8000/barbershops/${resolvedParams.slug}/services`,
+        );
+        if (resServices.ok) setServices(await resServices.json());
+
+        const resBookings = await fetch(
+          `http://127.0.0.1:8000/barbershops/${resolvedParams.slug}/bookings`,
+        );
+        if (resBookings.ok) setAppointments(await resBookings.json());
+      } catch (error) {
+        toast.error("Erro ao carregar dados do servidor.");
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
-    }, 1000);
-  }, [currentUser]);
+    };
+
+    fetchDashboardData();
+  }, [resolvedParams.slug, router]);
+
+  // =========================================================================
+  // SALVAR SERVIÇO NO BANCO (FUNÇÃO NOVA)
+  // =========================================================================
+  const handleAddNovoServico = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const token = localStorage.getItem("barber_token");
+
+    const valor = parseFloat(newServicePrice.replace(",", "."));
+    const duracao = parseInt(newServiceDuration);
+    if (!newServiceName || isNaN(valor) || isNaN(duracao) || !shopId) return;
+
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/services/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: newServiceName,
+          price: valor,
+          duration: duracao,
+          barbershop_id: shopId,
+        }),
+      });
+
+      if (res.ok) {
+        toast.success("Serviço adicionado no banco!");
+        setShowNewServiceModal(false);
+        setNewServiceName("");
+        setNewServicePrice("");
+        setNewServiceDuration("30");
+        const novoServico = await res.json();
+        setServices([...services, novoServico]);
+      } else {
+        toast.error("Erro ao adicionar serviço.");
+      }
+    } catch (error) {
+      toast.error("Servidor Offline.");
+    }
+  };
+
+  // --- AS SUAS FUNÇÕES ANTIGAS (handleCancelAppointment, etc) CONTINUAM DAQUI PRA BAIXO ---
 
   const handleCancelAppointment = (id: string) => {
     if (window.confirm("Cancelar este agendamento e liberar o horário?")) {
       setAppointments((prev) => prev.filter((a) => a.id !== id));
       toast.success("Agendamento cancelado!");
-    }
-  };
-
-  // =========================================================================
-  // MODO DEMONSTRAÇÃO (TROCA RÁPIDA DE PERFIL)
-  // =========================================================================
-  const toggleDemoMode = () => {
-    if (currentUser.role === "OWNER") {
-      setCurrentUser({ id: "b2", name: "João Silva", role: "BARBER" });
-      // Se mudar para barbeiro e estiver numa aba proibida, volta pra agenda
-      if (activeTab === "equipe" || activeTab === "servicos") {
-        setActiveTab("agenda");
-      }
-      toast("Visão alterada para: Barbeiro Parceiro", { icon: "✂️" });
-    } else {
-      setCurrentUser({ id: "b1", name: "CEO (Você)", role: "OWNER" });
-      toast("Visão alterada para: CEO / Dono", { icon: "👑" });
     }
   };
 
@@ -315,7 +341,7 @@ export default function AdminDashboard({
           hour: "2-digit",
           minute: "2-digit",
         }),
-        barberId: currentUser.id, // <-- AQUI ESTÁ A SOLUÇÃO! Atrela a venda a quem está logado.
+        barberId: currentUser?.id, // <-- AQUI ESTÁ A SOLUÇÃO! Atrela a venda a quem está logado.
       },
       ...vendasAvulsas,
     ]);
@@ -478,8 +504,8 @@ export default function AdminDashboard({
       <div className="mb-8">
         <h2 className="text-2xl font-black text-white mb-1">Agenda de Hoje</h2>
         <p className="text-zinc-500 text-sm flex items-center gap-2">
-          <Calendar className="w-4 h-4 text-cyan-500" /> Olá, {currentUser.name}
-          . Aqui estão seus clientes.
+          <Calendar className="w-4 h-4 text-cyan-500" /> Olá,{" "}
+          {currentUser?.name}. Aqui estão seus clientes.
         </p>
       </div>
       {appointments.length === 0 ? (
@@ -501,7 +527,7 @@ export default function AdminDashboard({
                   <h3 className="text-white font-bold flex items-center gap-2">
                     {app.clientName}
                     {/* Badge indicando o profissional (Visível mais para o CEO) */}
-                    {currentUser.role === "OWNER" && (
+                    {currentUser?.role === "OWNER" && (
                       <span className="text-[10px] bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-full border border-zinc-700">
                         {
                           team
@@ -591,7 +617,7 @@ export default function AdminDashboard({
       <div className="animate-fade-in-up space-y-6">
         <div>
           <h2 className="text-2xl font-black text-white">
-            {currentUser.role === "OWNER" && team.length > 1
+            {currentUser?.role === "OWNER" && team.length > 1
               ? "Caixa Geral (Hub)"
               : "Meu Caixa"}
           </h2>
@@ -611,7 +637,7 @@ export default function AdminDashboard({
           </div>
 
           {/* 2. FATURAMENTO MENSAL: Agora ele reflete o estado lucroMensal atualizado */}
-          {currentUser.role === "OWNER" && (
+          {currentUser?.role === "OWNER" && (
             <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl opacity-60">
               <p className="text-zinc-500 text-[10px] font-black uppercase tracking-widest mb-1">
                 Faturamento Mensal
@@ -623,7 +649,7 @@ export default function AdminDashboard({
           )}
         </div>
 
-        {currentUser.role === "OWNER" && team.length > 1 && (
+        {currentUser?.role === "OWNER" && team.length > 1 && (
           <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl">
             <h3 className="text-white font-bold mb-4 flex items-center gap-2">
               <Users className="w-5 h-5 text-zinc-500" /> Faturamento por
@@ -718,7 +744,7 @@ export default function AdminDashboard({
           className="w-full bg-white text-black font-black py-4 rounded-2xl flex items-center justify-center gap-2 hover:bg-zinc-200 transition-colors"
         >
           <CheckCircle2 className="w-5 h-5" />{" "}
-          {currentUser.role === "OWNER"
+          {currentUser?.role === "OWNER"
             ? "Fechar Caixa do Hub"
             : "Fechar Meu Caixa"}
         </button>
@@ -779,7 +805,7 @@ export default function AdminDashboard({
       <div className="flex justify-between items-center mb-8">
         <h2 className="text-2xl font-black text-white">Serviços</h2>
         {/* Apenas o CEO pode adicionar serviços novos */}
-        {currentUser.role === "OWNER" && (
+        {currentUser?.role === "OWNER" && (
           <button
             onClick={() => setShowNewServiceModal(true)}
             className="bg-zinc-900 text-white p-2 rounded-xl border border-zinc-800 hover:border-zinc-700 transition-colors"
@@ -822,7 +848,7 @@ export default function AdminDashboard({
           </p>
         </div>
 
-        {currentUser.role === "OWNER" && (
+        {currentUser?.role === "OWNER" && (
           <button
             onClick={handleAddNovoProduto}
             className="bg-zinc-900 text-white p-2.5 rounded-xl border border-zinc-800 hover:border-zinc-700 active:scale-95 transition-all"
@@ -843,7 +869,7 @@ export default function AdminDashboard({
               <h3 className="text-white font-bold leading-tight flex items-center gap-2">
                 {p.name}
                 {/* Botão de Editar VISÍVEL e Estilizado */}
-                {currentUser.role === "OWNER" && (
+                {currentUser?.role === "OWNER" && (
                   <button
                     onClick={() => handleEditarPrecoProduto(p.id, p.price)}
                     className="bg-zinc-950 p-1.5 rounded-lg border border-zinc-800 text-zinc-600 hover:text-cyan-500 active:text-cyan-500 transition-colors"
@@ -874,7 +900,7 @@ export default function AdminDashboard({
                     registrarVendaNoCaixa(
                       `Produto: ${p.name}`,
                       p.price,
-                      currentUser.id,
+                      currentUser?.id || "unknown",
                     );
                     toast.success(`${p.name} vendido!`);
                   }}
@@ -887,7 +913,7 @@ export default function AdminDashboard({
                   {p.stock}
                 </span>
 
-                {currentUser.role === "OWNER" ? (
+                {currentUser?.role === "OWNER" ? (
                   <button
                     onClick={() =>
                       setProducts(
@@ -906,7 +932,7 @@ export default function AdminDashboard({
               </div>
 
               {/* Botão Deletar com proporção reduzida */}
-              {currentUser.role === "OWNER" && (
+              {currentUser?.role === "OWNER" && (
                 <button
                   onClick={() => handleDeletarProduto(p.id, p.name)}
                   className="p-2 bg-zinc-950 text-zinc-600 hover:text-red-500 rounded-xl border border-zinc-800 transition-all active:bg-red-500/10"
@@ -934,16 +960,16 @@ export default function AdminDashboard({
       <div className="flex items-center gap-6 bg-zinc-900 border border-zinc-800 p-6 rounded-3xl group">
         <div
           onClick={() =>
-            currentUser.role === "OWNER" && logoInputRef.current?.click()
+            currentUser?.role === "OWNER" && logoInputRef.current?.click()
           }
-          className={`w-20 h-20 bg-zinc-950 rounded-full border-2 border-dashed border-zinc-800 flex items-center justify-center overflow-hidden relative ${currentUser.role === "OWNER" ? "cursor-pointer" : ""}`}
+          className={`w-20 h-20 bg-zinc-950 rounded-full border-2 border-dashed border-zinc-800 flex items-center justify-center overflow-hidden relative ${currentUser?.role === "OWNER" ? "cursor-pointer" : ""}`}
         >
           {logoUrl ? (
             <img src={logoUrl} className="w-full h-full object-cover" />
           ) : (
             <Camera className="text-zinc-800" />
           )}
-          {currentUser.role === "OWNER" && (
+          {currentUser?.role === "OWNER" && (
             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
               <Camera className="w-5 h-5 text-white" />
             </div>
@@ -952,7 +978,7 @@ export default function AdminDashboard({
         <div>
           <h3 className="text-white font-bold">Logotipo da Barbearia</h3>
           <p className="text-xs text-zinc-500 mt-1">
-            {currentUser.role === "OWNER"
+            {currentUser?.role === "OWNER"
               ? "Clique na imagem para alterar."
               : "Apenas o CEO pode alterar."}
           </p>
@@ -984,14 +1010,14 @@ export default function AdminDashboard({
           <h3 className="text-white font-bold flex items-center gap-2">
             <Clock className="w-5 h-5 text-cyan-500" /> Funcionamento e Agenda
           </h3>
-          {currentUser.role === "OWNER" && (
+          {currentUser?.role === "OWNER" && (
             <span className="text-[10px] text-cyan-500 font-black uppercase tracking-widest bg-cyan-500/10 px-2 py-1 rounded-md">
               Define a Agenda
             </span>
           )}
         </div>
 
-        {currentUser.role === "OWNER" ? (
+        {currentUser?.role === "OWNER" ? (
           <div className="space-y-6">
             {/* Seletor de Dias da Semana */}
             <div>
@@ -1105,14 +1131,14 @@ export default function AdminDashboard({
       <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-white font-bold">Sobre a Barbearia</h3>
-          {currentUser.role === "OWNER" && (
+          {currentUser?.role === "OWNER" && (
             <span className="text-[10px] text-cyan-500 font-black uppercase tracking-widest bg-cyan-500/10 px-2 py-1 rounded-md">
               Visível para o Cliente
             </span>
           )}
         </div>
 
-        {currentUser.role === "OWNER" ? (
+        {currentUser?.role === "OWNER" ? (
           // Visão do Dono: Textarea fixo (resize-none) com botão de salvar
           <div className="space-y-3">
             <textarea
@@ -1147,7 +1173,7 @@ export default function AdminDashboard({
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-white font-bold">Galeria de Cortes</h3>
           {/* Apenas o CEO pode adicionar fotos ao portfólio */}
-          {currentUser.role === "OWNER" && (
+          {currentUser?.role === "OWNER" && (
             <button
               onClick={() => portfolioInputRef.current?.click()}
               className="text-xs bg-zinc-800 text-white px-4 py-2 rounded-xl border border-zinc-700 hover:bg-zinc-700 transition-colors"
@@ -1163,7 +1189,7 @@ export default function AdminDashboard({
               className="aspect-square bg-zinc-950 rounded-2xl border border-zinc-800 overflow-hidden relative group"
             >
               <img src={p} className="w-full h-full object-cover" />
-              {currentUser.role === "OWNER" && (
+              {currentUser?.role === "OWNER" && (
                 <button
                   onClick={() =>
                     setPortfolioPhotos(
@@ -1194,7 +1220,7 @@ export default function AdminDashboard({
     { id: "agenda", icon: LayoutDashboard, label: "Agenda" },
     { id: "caixa", icon: DollarSign, label: "Caixa" },
     { id: "produtos", icon: ShoppingBag, label: "Estoque" },
-    ...(currentUser.role === "OWNER"
+    ...(currentUser?.role === "OWNER"
       ? [
           { id: "servicos", icon: Scissors, label: "Serviços" },
           // O botão de equipe só entra se houver mais de 1 pessoa no time
@@ -1206,21 +1232,112 @@ export default function AdminDashboard({
     { id: "perfil", icon: Settings, label: "Vitrine" },
   ];
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-950">
+        <Loader2 className="w-8 h-8 text-cyan-500 animate-spin" />
+      </div>
+    );
+  }
+
+  // --- TELA DE BLOQUEIO (PIN) ---
+  if (isLocked || !currentUser) {
+    return (
+      <div className="min-h-screen bg-zinc-950 flex flex-col items-center justify-center p-6 relative overflow-hidden">
+        {/* Efeito de Fundo */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-cyan-500/10 blur-[100px] rounded-full pointer-events-none" />
+
+        <div className="z-10 w-full max-w-md animate-fade-in-up">
+          <div className="text-center mb-10">
+            <h1 className="text-3xl font-black text-white uppercase tracking-widest mb-2">
+              {barbershop?.name || "Barbearia"}
+            </h1>
+            <p className="text-zinc-500 text-sm">
+              Selecione o seu perfil para acessar
+            </p>
+          </div>
+
+          {!selectedBarberForPin ? (
+            <div className="grid grid-cols-2 gap-4">
+              {team.map((member) => (
+                <button
+                  key={member.id}
+                  onClick={() => setSelectedBarberForPin(member)}
+                  className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl flex flex-col items-center gap-3 hover:border-cyan-500/50 hover:bg-zinc-800 transition-all group"
+                >
+                  <div className="w-14 h-14 bg-linear-to-br from-zinc-800 to-zinc-900 rounded-full border border-zinc-700 flex items-center justify-center text-zinc-400 font-bold shadow-inner group-hover:text-cyan-500 group-hover:border-cyan-500/30 transition-colors text-xl">
+                    {member.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div className="text-center">
+                    <p className="text-white font-bold text-sm truncate w-24">
+                      {member.name}
+                    </p>
+                    <p className="text-[10px] text-zinc-500 uppercase mt-1 tracking-widest">
+                      {member.role === "OWNER" ? "👑 CEO" : "Barbeiro"}
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="bg-zinc-900 border border-zinc-800 p-8 rounded-3xl shadow-2xl">
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-linear-to-br from-cyan-900 to-zinc-900 rounded-full border border-cyan-500/30 flex items-center justify-center text-cyan-400 font-bold shadow-inner text-2xl mx-auto mb-4">
+                  {selectedBarberForPin.name.charAt(0).toUpperCase()}
+                </div>
+                <h3 className="text-white font-bold text-lg">
+                  {selectedBarberForPin.name}
+                </h3>
+                <p className="text-xs text-zinc-500 uppercase tracking-widest">
+                  Digite seu PIN
+                </p>
+              </div>
+
+              <input
+                type="password"
+                maxLength={4}
+                autoFocus
+                value={pinInput}
+                onChange={(e) => setPinInput(e.target.value.replace(/\D/g, ""))}
+                onKeyDown={(e) => {
+                  // Captura o "Enter" diretamente no teclado!
+                  if (e.key === "Enter" && pinInput.length === 4) {
+                    handleUnlock();
+                  }
+                }}
+                className="w-full bg-zinc-950 border border-zinc-800 p-4 rounded-xl text-center text-3xl font-mono text-cyan-400 tracking-[1em] focus:border-cyan-500 outline-none mb-6 shadow-inner"
+                placeholder="••••"
+              />
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedBarberForPin(null);
+                    setPinInput("");
+                  }}
+                  className="px-4 py-3 bg-zinc-800 text-zinc-400 rounded-xl hover:bg-zinc-700 hover:text-white font-bold transition-colors"
+                >
+                  Voltar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleUnlock()}
+                  disabled={pinInput.length < 4}
+                  className="flex-1 bg-cyan-600 text-white rounded-xl font-bold hover:bg-cyan-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wider text-sm shadow-lg shadow-cyan-900/20"
+                >
+                  Entrar
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-zinc-950 overflow-hidden relative selection:bg-cyan-500/30">
-      {/* BOTÃO FLUTUANTE DE MODO DEMO (Para usar nas vendas) */}
-      <button
-        onClick={toggleDemoMode}
-        className="fixed top-4 right-4 md:top-6 md:right-8 z-60 bg-cyan-600/20 hover:bg-cyan-600/40 border border-cyan-500/50 text-cyan-400 backdrop-blur-md px-4 py-2 rounded-full font-bold text-xs flex items-center gap-2 transition-all shadow-lg shadow-cyan-900/20"
-      >
-        <span className="relative flex h-2 w-2">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-          <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
-        </span>
-        Modo Demo:{" "}
-        {currentUser.role === "OWNER" ? "Visão CEO" : "Visão Barbeiro"}
-      </button>
-
       <AnimatePresence>
         {/* MODAL FECHAMENTO CAIXA */}
         {showEmailPrompt && (
@@ -1297,26 +1414,7 @@ export default function AdminDashboard({
                   <X className="w-5 h-5 text-zinc-600 hover:text-white" />
                 </button>
               </h3>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  setServices([
-                    ...services,
-                    {
-                      id: Date.now().toString(),
-                      name: newServiceName,
-                      price: parseFloat(newServicePrice),
-                      duration: parseInt(newServiceDuration),
-                      hidePrice: newServiceHidePrice,
-                    },
-                  ]);
-                  setShowNewServiceModal(false);
-                  setNewServiceName("");
-                  setNewServicePrice("");
-                  toast.success("Serviço adicionado!");
-                }}
-                className="space-y-4"
-              >
+              <form onSubmit={handleAddNovoServico} className="space-y-4">
                 <input
                   required
                   value={newServiceName}
@@ -1382,10 +1480,16 @@ export default function AdminDashboard({
           ))}
         </nav>
         <button
-          onClick={() => router.push("/login")}
-          className="mt-auto flex items-center gap-2 text-zinc-700 hover:text-red-400 text-sm font-bold p-3 transition-colors"
+          onClick={() => {
+            setIsLocked(true); // 1. Tranca a tela
+            setActiveTab("agenda"); // 2. Volta para a aba padrão
+            setCurrentUser(null); // 3. Tira o utilizador atual da sessão
+          }}
+          className="w-full mt-auto flex items-center justify-center md:justify-start gap-3 p-3 rounded-xl text-zinc-400 hover:text-white hover:bg-zinc-800 transition-all font-bold border border-transparent hover:border-zinc-700"
+          title="Bloquear Sistema"
         >
-          <LogOut className="w-4 h-4" /> Sair
+          <Lock className="w-5 h-5" />
+          <span className="hidden md:block">Bloquear</span>
         </button>
       </aside>
 
@@ -1415,6 +1519,19 @@ export default function AdminDashboard({
             </span>
           </button>
         ))}
+        <button
+          onClick={() => {
+            setIsLocked(true);
+            setActiveTab("agenda");
+            setCurrentUser(null);
+          }}
+          className="flex flex-col items-center gap-1 p-2 transition-all text-zinc-500 hover:text-white"
+        >
+          <Lock className="w-5 h-5" />
+          <span className="text-[10px] font-bold hidden sm:block">
+            Bloquear
+          </span>
+        </button>
       </nav>
     </div>
   );
