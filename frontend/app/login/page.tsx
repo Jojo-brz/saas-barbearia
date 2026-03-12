@@ -10,25 +10,19 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
-  // LOGIN NORMAL (Tentará conectar no seu backend FastAPI, caso ele esteja rodando)
+  // LOGIN NORMAL (Conecta no seu backend FastAPI)
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    // === ATALHO SECRETO PARA PORTFÓLIO ===
-    // Se a pessoa digitar os dados de demo manualmente, nós interceptamos e não chamamos a API.
-    if (email === "demo@barbersaas.com" && password === "demo123") {
-      executarLoginDemonstracao();
-      return;
-    }
-
     setLoading(true);
+
     const formData = new FormData();
     formData.append("username", email);
     formData.append("password", password);
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/token", {
+      const res = await fetch(`${API_URL}/token`, {
         method: "POST",
         body: formData,
       });
@@ -46,36 +40,52 @@ export default function LoginPage() {
         toast.error("E-mail ou senha incorretos.");
       }
     } catch {
-      toast.error(
-        "Erro ao conectar com o servidor. Tente o acesso de Demonstração.",
-      );
+      toast.error("Erro ao conectar com o servidor.");
     } finally {
       setLoading(false);
     }
   };
 
-  // LOGIN DE DEMONSTRAÇÃO (Não precisa de backend, vai direto pro Portfólio)
-  const executarLoginDemonstracao = () => {
-    setEmail("demo@barbersaas.com");
-    setPassword("demo123");
+  // LOGIN DE DEMONSTRAÇÃO (Faz login REAL no backend usando a conta de teste)
+  const executarLoginDemonstracao = async () => {
+    setEmail("demo@barbearia.com");
+    setPassword("123456");
     setLoading(true);
 
-    // Simula o tempo de resposta do servidor
-    setTimeout(() => {
-      localStorage.setItem("barber_token", "token-falso-para-demo");
-      localStorage.setItem("barber_slug", "barbearia-demo");
-      localStorage.setItem("barber_role", "admin");
+    const formData = new FormData();
+    formData.append("username", "demo@barbearia.com");
+    formData.append("password", "123456");
 
-      toast.success("Acesso de demonstração liberado!", {
-        style: {
-          background: "#18181b",
-          color: "#fff",
-          border: "1px solid #27272a",
-        },
+    try {
+      const res = await fetch(`${API_URL}/token`, {
+        method: "POST",
+        body: formData,
       });
+      if (res.ok) {
+        const data = await res.json();
+        localStorage.setItem("barber_token", data.access_token);
+        localStorage.setItem("barber_slug", data.slug);
+        localStorage.setItem("barber_role", data.role);
 
-      router.push("/admin/barbearia-demo");
-    }, 1500);
+        toast.success("Acesso de demonstração liberado!", {
+          style: {
+            background: "#18181b",
+            color: "#fff",
+            border: "1px solid #27272a",
+          },
+        });
+
+        setTimeout(() => {
+          router.push(`/admin/${data.slug}`);
+        }, 1500);
+      } else {
+        toast.error("Crie a conta demo@barbearia.com no Super Admin primeiro!");
+      }
+    } catch {
+      toast.error("Erro ao conectar com o servidor.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
