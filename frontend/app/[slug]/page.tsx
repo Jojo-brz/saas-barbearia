@@ -34,57 +34,62 @@ export default function TelaDoCliente() {
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
 
-  // === BUSCA DE DADOS (API) ===
-  useEffect(() => {
-    if (slug) {
-      fetchShopData();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug]);
+  // Função para gerar slots de 10 em 10 minutos baseada no banco
+  // Função que gera os slots baseada no horário real da barbearia
+  const generateTimeSlots = () => {
+    // Se o backend ainda não carregou os dados da shop, retorna vazio
+    if (!shop || !shop.opens_at || !shop.closes_at) return [];
 
-  const fetchShopData = async () => {
-    try {
-      // 1. Busca os dados da vitrine da Barbearia
-      const resShop = await fetch(`${API_URL}/barbershops/${slug}`);
-      if (!resShop.ok) {
-        setLoading(false);
-        return;
+    const slots = [];
+    // Converte "09:00" em números para o cálculo
+    let [currentHour, currentMin] = shop.opens_at.split(':').map(Number);
+    const [endHour, endMin] = shop.closes_at.split(':').map(Number);
+
+    const totalEndMinutes = endHour * 60 + endMin;
+
+    // Loop que adiciona 10 minutos até chegar ao horário de fecho
+    while ((currentHour * 60 + currentMin) < totalEndMinutes) {
+      const time = `${currentHour.toString().padStart(2, "0")}:${currentMin
+        .toString()
+        .padStart(2, "0")}`;
+      
+      slots.push({ time, available: true });
+
+      currentMin += 10;
+      if (currentMin >= 60) {
+        currentMin = 0;
+        currentHour++;
       }
-      setShop(await resShop.json());
-
-      // 2. Busca os serviços cadastrados
-      const resServices = await fetch(
-        `${API_URL}/barbershops/${slug}/services`,
-      );
-      if (resServices.ok) setServices(await resServices.json());
-
-      // 3. Busca a equipa de barbeiros
-      const resBarbers = await fetch(`${API_URL}/barbershops/${slug}/barbers`);
-      if (resBarbers.ok) setBarbers(await resBarbers.json());
-    } catch (error) {
-      console.error("Erro ao buscar dados da barbearia:", error);
     }
-    setLoading(false);
+    return slots;
   };
 
-  // === DADOS MOCKADOS (Mantidos para a UI não quebrar) ===
-  const portfolio = [
-    "https://images.unsplash.com/photo-1585747860715-2ba37e788b70?auto=format&fit=crop&w=500&q=80",
-    "https://images.unsplash.com/photo-1512690459411-b9245aed614b?auto=format&fit=crop&w=500&q=80",
-    "https://images.unsplash.com/photo-1593060686940-b4f0b22a0097?auto=format&fit=crop&w=500&q=80",
-    "https://images.unsplash.com/photo-1621605815971-fbc98d665033?auto=format&fit=crop&w=500&q=80",
-  ];
 
-  const dias = ["Hoje, 15", "Amanhã, 16", "Sexta, 17", "Sábado, 18"];
-  const horarios = [
-    { time: "09:00", available: true },
-    { time: "09:45", available: false },
-    { time: "10:30", available: true },
-    { time: "11:15", available: true },
-    { time: "14:00", available: true },
-    { time: "14:45", available: false },
-    { time: "15:30", available: true },
-  ];
+  // === BUSCA DE DADOS (API) ===
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        setLoading(true);
+        const resShop = await fetch(`${API_URL}/barbershops/${slug}`);
+        if (!resShop.ok) throw new Error("Barbearia não encontrada");
+        const shopData = await resShop.json();
+        setShop(shopData);
+
+        const resServices = await fetch(`${API_URL}/barbershops/${slug}/services`);
+        if (resServices.ok) setServices(await resServices.json());
+
+        const resBarbers = await fetch(`${API_URL}/barbershops/${slug}/barbers`);
+        if (resBarbers.ok) setBarbers(await resBarbers.json());
+      } catch (error) {
+        console.error("Erro ao carregar dados:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    if (slug) fetchData();
+  }, [slug, API_URL]);
+
+  const horariosDinamicos = generateTimeSlots();
 
   // === FUNÇÕES DE CONTROLO DO MODAL ===
   const abrirModal = () => setIsModalOpen(true);
@@ -112,8 +117,53 @@ export default function TelaDoCliente() {
   const handleConfirmar = async () => {
     if (!customerName || !customerPhone) {
       alert("Por favor, preencha o seu nome e telefone!");
+      try {
+    const res = await fetch(`${API_URL}/bookings/`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (res.ok) {
+      setStep(5);
+    } else {
+      // Agora o await abaixo vai funcionar porque a função é async!
+      const err = await res.json(); 
+      alert("Erro: " + (err.detail || "Falha ao agendar"));
+    }
+  } catch (error) {
+    console.error(error);
+  }
+};
       return;
     }
+
+    const payload = {
+      client_name: customerName,
+      client_phone: customerPhone,
+      service_id: selectedService.id,
+      barber_id: selectedBarber.id,
+      date: selectedDate, // Certifique-se que está no formato YYYY-MM-DD
+      time: selectedTime, // Formato HH:MM
+      barbershop_id: shop.id
+    };
+
+    try {
+      const res = await fetch(`${API_URL}/bookings/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        setStep(5); // Passo de sucesso
+      } else {
+        alert("Erro ao agendar. Tente outro horário.");
+      }
+    } catch (error) {
+      alert("Erro de conexão com o servidor.");
+    }
+  };
 
     // Criamos uma data ISO real baseada no horário escolhido pelo cliente
     const today = new Date().toISOString().split("T")[0];
@@ -421,49 +471,37 @@ export default function TelaDoCliente() {
                 </div>
               )}
 
-              {/* Etapa 3: Data e Hora (Mantido o mock das datas por enquanto) */}
+              {/* Etapa 3: Data e Hora */}
               {step === 3 && (
-                <div className="animate-fade-in-right space-y-6">
-                  <div>
-                    <h3 className="text-white font-bold mb-4 flex items-center gap-2">
-                      <CalendarIcon className="w-5 h-5 text-zinc-500" /> Data
-                      Disponível
-                    </h3>
-                    <div className="flex overflow-x-auto pb-2 gap-3 no-scrollbar snap-x">
-                      {dias.map((dia) => (
-                        <button
-                          key={dia}
-                          onClick={() => setSelectedDate(dia)}
-                          className={`snap-start whitespace-nowrap px-5 py-3 rounded-xl border font-medium transition-all text-sm ${selectedDate === dia ? "bg-cyan-500 text-black border-cyan-500" : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:border-zinc-700"}`}
-                        >
-                          {dia}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+  <div className="space-y-6 animate-fade-in">
+    <div className="flex items-center gap-3 mb-2">
+      <div className="w-10 h-10 rounded-full bg-cyan-500/20 flex items-center justify-center text-cyan-500">
+        <Clock className="w-5 h-5" />
+      </div>
+      <div>
+        <h3 className="text-xl font-bold text-white leading-tight">Escolha o Horário</h3>
+        <p className="text-zinc-500 text-sm">Intervalos de 10 em 10 minutos</p>
+      </div>
+    </div>
 
-                  {selectedDate && (
-                    <div className="animate-fade-in-up">
-                      <h3 className="text-white font-bold mb-4 flex items-center gap-2">
-                        <Clock className="w-5 h-5 text-zinc-500" /> Horários
-                      </h3>
-                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                        {horarios.map((hr) => (
-                          <button
-                            key={hr.time}
-                            disabled={!hr.available}
-                            onClick={() => setSelectedTime(hr.time)}
-                            className={`p-3 rounded-xl border font-bold transition-all text-sm ${!hr.available ? "bg-zinc-950 border-zinc-900 text-zinc-700 opacity-50 cursor-not-allowed line-through" : selectedTime === hr.time ? "bg-cyan-500 border-cyan-500 text-black" : "bg-zinc-900 border-zinc-800 text-white hover:border-zinc-700"}`}
-                          >
-                            {hr.time}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
+    {/* Grid ajustado para 3 ou 4 colunas conforme o ecrã */}
+    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-75 overflow-y-auto pr-2 custom-scrollbar">
+      {horariosDinamicos.map((h) => (
+        <button
+          key={h.time}
+          onClick={() => setSelectedTime(h.time)}
+          className={`py-3 rounded-xl font-medium transition-all ${
+            selectedTime === h.time
+              ? "bg-cyan-500 text-black shadow-[0_0_15px_rgba(6,182,212,0.4)]"
+              : "bg-zinc-900 text-zinc-400 border border-zinc-800 hover:border-zinc-600"
+          }`}
+        >
+          {h.time}
+        </button>
+      ))}
+    </div>
+  </div>
+)}
               {/* Etapa 4: Revisão e Inputs do Cliente */}
               {step === 4 && (
                 <div className="animate-fade-in-right">

@@ -50,7 +50,6 @@ class Barber(SQLModel, table=True):
     barbershop_id: int = Field(foreign_key="barbershop.id")
     barbershop: "Barbershop" = Relationship(back_populates="barbers")
     bookings: List["Booking"] = Relationship(back_populates="barber")
-    bookings: List["Booking"] = Relationship(back_populates="barber")
 
 class ServiceBase(SQLModel):
     name: str

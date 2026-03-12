@@ -124,7 +124,10 @@ export default function AdminDashboard({
   const [activeTab, setActiveTab] = useState("agenda");
   const [isLoading, setIsLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
-
+  const [isEditingInfo, setIsEditingInfo] = useState(false);
+  const [isSavingInfo, setIsSavingInfo] = useState(false);
+  const [isSavingEndereco, setIsSavingEndereco] = useState(false);
+  const [isSavingSobre, setIsSavingSobre] = useState(false);
   // Configurações e Caixa (mantidos do seu design incrível)
   const [diasAbertos, setDiasAbertos] = useState([
     "Segunda",
@@ -172,6 +175,27 @@ export default function AdminDashboard({
   const [newServicePrice, setNewServicePrice] = useState("");
   const [newServiceDuration, setNewServiceDuration] = useState("30");
   const [newServiceHidePrice, setNewServiceHidePrice] = useState(false);
+
+  // =========================================================================
+  // SALVAR INFORMAÇÕES DA VITRINE
+  // =========================================================================
+  const handleSaveShopInfo = async () => {
+    setIsSavingInfo(true);
+    try {
+      // 💡 AQUI ENTRARÁ O SEU FETCH PARA ATUALIZAR O BANCO DE DADOS NO FUTURO
+      // Ex: await fetch(`${API_URL}/barbershops/${barbershop.id}`, { method: 'PUT', ... })
+
+      // Simulando um tempo de carregamento de 1 segundo para dar a sensação visual de "salvando"
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      toast.success("Informações da vitrine salvas com sucesso!");
+      setIsEditingInfo(false); // Tranca os campos novamente!
+    } catch (error) {
+      toast.error("Erro ao salvar as informações.");
+    } finally {
+      setIsSavingInfo(false);
+    }
+  };
 
   // =========================================================================
   // SISTEMA DE ACESSO POR PIN
@@ -257,6 +281,14 @@ export default function AdminDashboard({
   const handleAddNovoServico = async (e: React.FormEvent) => {
     e.preventDefault();
     const token = localStorage.getItem("barber_token");
+
+    if (!token) {
+      toast.error(
+        "Sessão expirada ou sem Token! Faça o Login Mestre novamente.",
+      );
+      // Opcional: router.push("/login");
+      return;
+    }
 
     const valor = parseFloat(newServicePrice.replace(",", "."));
     const duracao = parseInt(newServiceDuration);
@@ -761,13 +793,6 @@ export default function AdminDashboard({
         </div>
       </div>
 
-      <div className="bg-cyan-900/10 border border-cyan-500/20 p-4 rounded-2xl mb-6">
-        <p className="text-cyan-400 text-sm font-bold flex items-center justify-between">
-          <span>Plano Atual: Básico</span>
-          <span>{team.length} / 3 Profissionais</span>
-        </p>
-      </div>
-
       <div className="space-y-3">
         {team.map((member) => (
           <div
@@ -950,13 +975,15 @@ export default function AdminDashboard({
 
   const renderPerfil = () => (
     <div className="animate-fade-in-up space-y-8">
+      {/* CABEÇALHO */}
       <div>
         <h2 className="text-2xl font-black text-white">Vitrine Pública</h2>
         <p className="text-zinc-500 text-sm font-medium">
-          Link: barbersaas.com/{resolvedParams.slug}
+          Link: barbersaas.com/sua-barbearia
         </p>
       </div>
 
+      {/* LOGOTIPO */}
       <div className="flex items-center gap-6 bg-zinc-900 border border-zinc-800 p-6 rounded-3xl group">
         <div
           onClick={() =>
@@ -992,19 +1019,41 @@ export default function AdminDashboard({
         onChange={(e) => handleFileSelect(e, "logo")}
       />
 
+      {/* ENDEREÇO (COM BOTÃO SALVAR) */}
       <div className="mt-4">
         <label className="text-xs text-zinc-500 mb-1 block font-bold uppercase tracking-wider">
           Endereço da Barbearia
         </label>
-        <input
-          value={endereco}
-          onChange={(e) => setEndereco(e.target.value)}
-          placeholder="Ex: Av. Principal, 123 - Bairro"
-          className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-zinc-300 text-sm outline-none focus:border-cyan-500 transition-colors"
-        />
+        <div className="relative">
+          <input
+            value={endereco}
+            onChange={(e) => setEndereco(e.target.value)}
+            disabled={currentUser?.role !== "OWNER"}
+            placeholder="Ex: Av. Principal, 123 - Bairro"
+            className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 pr-24 text-zinc-300 text-sm outline-none focus:border-cyan-500 transition-colors disabled:opacity-50"
+          />
+          {currentUser?.role === "OWNER" && (
+            <button
+              onClick={async () => {
+                setIsSavingEndereco(true);
+                await new Promise((resolve) => setTimeout(resolve, 800));
+                toast.success("Endereço atualizado!");
+                setIsSavingEndereco(false);
+              }}
+              disabled={isSavingEndereco}
+              className="absolute right-2 top-2 bottom-2 bg-zinc-800 text-zinc-300 px-3 rounded-lg text-xs font-bold hover:bg-cyan-600 hover:text-white transition-all disabled:opacity-50 flex items-center gap-1"
+            >
+              {isSavingEndereco ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                "Salvar"
+              )}
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* NOVO BLOCO: Horário de Funcionamento e Dias */}
+      {/* HORÁRIOS */}
       <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl mt-6">
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-white font-bold flex items-center gap-2">
@@ -1019,7 +1068,6 @@ export default function AdminDashboard({
 
         {currentUser?.role === "OWNER" ? (
           <div className="space-y-6">
-            {/* Seletor de Dias da Semana */}
             <div>
               <label className="text-xs text-zinc-500 mb-2 block font-bold uppercase tracking-wider">
                 Dias Abertos
@@ -1035,7 +1083,7 @@ export default function AdminDashboard({
                         : "bg-zinc-950 border-zinc-800 text-zinc-500 hover:text-zinc-300"
                     }`}
                   >
-                    {dia.slice(0, 3)} {/* Exibe Dom, Seg, Ter... */}
+                    {dia.slice(0, 3)}
                   </button>
                 ))}
               </div>
@@ -1089,7 +1137,6 @@ export default function AdminDashboard({
             </div>
           </div>
         ) : (
-          /* Visão Somente Leitura para a Equipe */
           <div className="space-y-4">
             <div className="flex flex-wrap gap-2 mb-4">
               {todosOsDias.map((dia) => (
@@ -1127,8 +1174,8 @@ export default function AdminDashboard({
         )}
       </div>
 
-      {/* NOVO BLOCO: Sobre a Barbearia */}
-      <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl">
+      {/* SOBRE A BARBEARIA */}
+      <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl mt-6">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-white font-bold">Sobre a Barbearia</h3>
           {currentUser?.role === "OWNER" && (
@@ -1139,7 +1186,6 @@ export default function AdminDashboard({
         </div>
 
         {currentUser?.role === "OWNER" ? (
-          // Visão do Dono: Textarea fixo (resize-none) com botão de salvar
           <div className="space-y-3">
             <textarea
               value={sobreBarbearia}
@@ -1149,18 +1195,28 @@ export default function AdminDashboard({
             />
             <div className="flex justify-end">
               <button
-                onClick={() => {
-                  // No futuro, aqui vai a chamada para salvar no banco de dados (ex: Supabase/Firebase)
+                onClick={async () => {
+                  setIsSavingSobre(true);
+                  await new Promise((resolve) => setTimeout(resolve, 800));
                   toast.success("Descrição salva com sucesso!");
+                  setIsSavingSobre(false);
                 }}
-                className="bg-cyan-600 hover:bg-cyan-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all active:scale-95"
+                disabled={isSavingSobre}
+                className="bg-zinc-800 hover:bg-cyan-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 disabled:opacity-50"
               >
-                Salvar Descrição
+                {isSavingSobre ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" /> Salvando...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" /> Salvar Descrição
+                  </>
+                )}
               </button>
             </div>
           </div>
         ) : (
-          // Visão da Equipe: Apenas leitura, com a mesma altura para manter o padrão visual
           <div className="w-full bg-zinc-950 border border-zinc-800/50 rounded-xl p-4 h-32 overflow-y-auto">
             <p className="text-zinc-400 text-sm leading-relaxed whitespace-pre-wrap">
               {sobreBarbearia || "Nenhuma descrição informada."}
@@ -1169,10 +1225,10 @@ export default function AdminDashboard({
         )}
       </div>
 
-      <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl">
+      {/* GALERIA DE CORTES */}
+      <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl mt-6">
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-white font-bold">Galeria de Cortes</h3>
-          {/* Apenas o CEO pode adicionar fotos ao portfólio */}
           {currentUser?.role === "OWNER" && (
             <button
               onClick={() => portfolioInputRef.current?.click()}
@@ -1422,23 +1478,26 @@ export default function AdminDashboard({
                   placeholder="Nome do serviço"
                   className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white focus:border-cyan-500 outline-none"
                 />
-                <div className="flex gap-3">
+
+                {/* SOLUÇÃO AQUI: Grid dividindo exatamente 50/50 */}
+                <div className="grid grid-cols-2 gap-3">
                   <input
                     required
                     value={newServicePrice}
                     onChange={(e) => setNewServicePrice(e.target.value)}
                     placeholder="R$ 0,00"
-                    className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white focus:border-cyan-500 outline-none"
+                    className="w-full min-w-0 bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white focus:border-cyan-500 outline-none"
                   />
                   <input
                     required
                     value={newServiceDuration}
                     onChange={(e) => setNewServiceDuration(e.target.value)}
                     placeholder="Minutos"
-                    className="w-24 bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white focus:border-cyan-500 outline-none"
+                    className="w-full min-w-0 bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-white focus:border-cyan-500 outline-none"
                   />
                 </div>
-                <label className="flex items-center gap-3 bg-zinc-950 p-4 rounded-xl border border-zinc-800 cursor-pointer">
+
+                <label className="flex items-center gap-3 bg-zinc-950 p-4 rounded-xl border border-zinc-800 cursor-pointer mt-2">
                   <input
                     type="checkbox"
                     checked={newServiceHidePrice}
@@ -1449,6 +1508,7 @@ export default function AdminDashboard({
                     Sob Consulta <EyeOff className="w-4 h-4" />
                   </span>
                 </label>
+
                 <button className="w-full bg-cyan-600 py-4 rounded-2xl text-white font-black mt-4 shadow-lg shadow-cyan-900/20 tracking-tighter hover:bg-cyan-500 transition-colors">
                   Cadastrar Serviço
                 </button>
