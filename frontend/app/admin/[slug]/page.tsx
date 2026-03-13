@@ -579,7 +579,9 @@ export default function AdminDashboard({
                     className="inline-flex items-center gap-1.5 text-xs text-green-500 hover:text-green-400 font-medium bg-green-500/10 px-2 py-1 rounded-md transition-colors"
                   >
                     <Phone className="w-3 h-3" />{" "}
-                    {app.phone.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3")}
+                    {app.phone
+                      ? app.phone.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3")
+                      : "Sem telefone"}
                   </a>
                 </div>
               </div>

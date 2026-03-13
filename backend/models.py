@@ -1,96 +1,90 @@
-from typing import Optional, List
-from sqlmodel import Field, SQLModel, Relationship
-import json
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Boolean, Text
+from sqlalchemy.orm import relationship
+from database import Base
+import datetime
 
-# Configuração Padrão
-DEFAULT_HOURS = json.dumps({
-    "monday": {"open": "09:00", "close": "18:00", "break_start": "", "break_end": "", "active": True},
-    "tuesday": {"open": "09:00", "close": "18:00", "break_start": "", "break_end": "", "active": True},
-    "wednesday": {"open": "09:00", "close": "18:00", "break_start": "", "break_end": "", "active": True},
-    "thursday": {"open": "09:00", "close": "18:00", "break_start": "", "break_end": "", "active": True},
-    "friday": {"open": "09:00", "close": "18:00", "break_start": "", "break_end": "", "active": True},
-    "saturday": {"open": "09:00", "close": "14:00", "break_start": "", "break_end": "", "active": True},
-    "sunday": {"open": "00:00", "close": "00:00", "break_start": "", "break_end": "", "active": False},
-})
+class Barbershop(Base):
+    __tablename__ = "barbershops"
 
-class SuperAdmin(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    email: str = Field(unique=True, index=True)
-    name: str
-    password: str
-
-class Barbershop(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    name: str
-    slug: str = Field(unique=True, index=True)
-    email: str = Field(unique=True, index=True)
-    password: str
-    is_active: bool = Field(default=True)
-    hours_config: str = Field(default=DEFAULT_HOURS)
-    logo_url: Optional[str] = None 
-    # --- NOVOS CAMPOS ADICIONADOS ---
-    address: Optional[str] = None
-    description: Optional[str] = None
-    instagram: Optional[str] = None
-
-    services: List["Service"] = Relationship(back_populates="barbershop")
-    barbers: List["Barber"] = Relationship(back_populates="barbershop")
-    bookings: List["Booking"] = Relationship(back_populates="barbershop")
-    cash_entries: List["CashEntry"] = Relationship(back_populates="barbershop")
-
-class Barber(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    name: str
-    photo_url: Optional[str] = None
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    slug = Column(String, unique=True, index=True, nullable=False)
+    owner_email = Column(String, unique=True, index=True, nullable=False)
+    password_hash = Column(String, nullable=False)
+    logo_url = Column(String, nullable=True)
     
-    # --- NOVOS CAMPOS ---
-    role: str = Field(default="BARBER") # Pode ser "OWNER" (Dono) ou "BARBER" (Equipe)
-    pin: Optional[str] = None # Senha de 4 dígitos para ações rápidas no PDV
+    # Novos campos para compatibilidade com o Frontend
+    description = Column(Text, nullable=True)
+    address = Column(String, nullable=True)
+    instagram = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True)
     
-    barbershop_id: int = Field(foreign_key="barbershop.id")
-    barbershop: "Barbershop" = Relationship(back_populates="barbers")
-    bookings: List["Booking"] = Relationship(back_populates="barber")
+    # CAMPO DE SEGURANÇA MESTRE
+    is_superadmin = Column(Boolean, default=False)
+    
+    # Configuração de horários (Armazenado como JSON string)
+    hours_config = Column(Text, nullable=True)
 
-class ServiceBase(SQLModel):
-    name: str
-    price: float
-    duration: int
-    image_url: Optional[str] = None 
-    barbershop_id: int = Field(foreign_key="barbershop.id")
+    # Relacionamentos
+    barbers = relationship("Barber", back_populates="barbershop", cascade="all, delete-orphan")
+    services = relationship("Service", back_populates="barbershop", cascade="all, delete-orphan")
+    appointments = relationship("Appointment", back_populates="barbershop", cascade="all, delete-orphan")
+    transactions = relationship("Transaction", back_populates="barbershop", cascade="all, delete-orphan")
 
-class Service(ServiceBase, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    barbershop: Optional[Barbershop] = Relationship(back_populates="services")
+class Barber(Base):
+    __tablename__ = "barbers"
 
-class ServiceCreate(ServiceBase):
-    pass
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    photo_url = Column(String, nullable=True)
+    role = Column(String, default="BARBER") # OWNER ou BARBER
+    
+    # CAMPO PARA LOGIN DE EQUIPE
+    pin = Column(String, nullable=True) # Senha de 4 dígitos
 
-class BookingBase(SQLModel):
-    customer_name: str
-    customer_phone: str
-    date_time: str
-    barbershop_id: int = Field(foreign_key="barbershop.id")
-    service_id: int = Field(foreign_key="service.id")
-    barber_id: int = Field(foreign_key="barber.id")
+    barbershop_id = Column(Integer, ForeignKey("barbershops.id"))
+    barbershop = relationship("Barbershop", back_populates="barbers")
+    appointments = relationship("Appointment", back_populates="barber")
 
-class Booking(BookingBase, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    barbershop: Optional[Barbershop] = Relationship(back_populates="bookings")
-    barber: Optional[Barber] = Relationship(back_populates="bookings")
+class Service(Base):
+    __tablename__ = "services"
 
-class BookingCreate(BookingBase):
-    pass
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    price = Column(Float, nullable=False)
+    duration = Column(Integer, nullable=False) # minutos
+    image_url = Column(String, nullable=True)
+    
+    barbershop_id = Column(Integer, ForeignKey("barbershops.id"))
+    barbershop = relationship("Barbershop", back_populates="services")
 
-class CashEntry(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    description: str
-    value: float
-    date: str
-    barbershop_id: int = Field(foreign_key="barbershop.id")
-    barbershop: Optional[Barbershop] = Relationship(back_populates="cash_entries")
+class Appointment(Base):
+    __tablename__ = "appointments"
 
-class CashEntryCreate(SQLModel):
-    description: str
-    value: float
-    date: str
-    barbershop_id: int
+    id = Column(Integer, primary_key=True, index=True)
+    client_name = Column(String, nullable=False)
+    phone = Column(String, nullable=False)
+    service_name = Column(String, nullable=False)
+    time = Column(DateTime, nullable=False) # Data e Hora combinados
+    price = Column(Float, nullable=False)
+    duration = Column(Integer, nullable=False)
+    status = Column(String, default="confirmed") # confirmed, completed, cancelled
+
+    barbershop_id = Column(Integer, ForeignKey("barbershops.id"))
+    barber_id = Column(Integer, ForeignKey("barbers.id"))
+
+    barbershop = relationship("Barbershop", back_populates="appointments")
+    barber = relationship("Barber", back_populates="appointments")
+
+class Transaction(Base):
+    __tablename__ = "transactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    description = Column(String, nullable=False)
+    amount = Column(Float, nullable=False)
+    type = Column(String, nullable=False) # "IN" ou "OUT"
+    category = Column(String, nullable=False) # Ex: "Corte", "Aluguel", "Produtos"
+    date = Column(DateTime, default=datetime.datetime.utcnow)
+    
+    barbershop_id = Column(Integer, ForeignKey("barbershops.id"))
+    barbershop = relationship("Barbershop", back_populates="transactions")

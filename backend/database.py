@@ -1,27 +1,24 @@
-import os
-from sqlmodel import SQLModel, create_engine, Session
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
 
-# 1. Tenta pegar a URL do banco das variáveis de ambiente (Nuvem)
-DATABASE_URL = os.environ.get("DATABASE_URL")
+# Nome do arquivo do banco de dados
+SQLALCHEMY_DATABASE_URL = "sqlite:///./database.db"
 
-# Se for PostgreSQL (Render/Hostinger), ajusta a URL
-if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
-    connect_args = {} # PostgreSQL não precisa de argumentos extras
-else:
-    # 2. Se não tiver URL (Docker Local), usa o SQLite na pasta protegida
-    os.makedirs("data", exist_ok=True)
-    sqlite_file_name = "data/database.db"
-    DATABASE_URL = f"sqlite:///{sqlite_file_name}"
-    connect_args = {"check_same_thread": False} # Apenas para SQLite
+# O connect_args é necessário apenas para o SQLite
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
+)
 
-# 3. Cria a Engine UMA única vez
-engine = create_engine(DATABASE_URL, connect_args=connect_args, echo=False)
+# É aqui que o erro acontecia: Precisamos definir o SessionLocal
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-def create_db_and_tables():
-    SQLModel.metadata.create_all(engine)
+Base = declarative_base()
 
-# 4. Define o get_session UMA única vez
-def get_session():
-    with Session(engine) as session:
-        yield session
+# Função para as rotas do FastAPI obterem o banco
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
