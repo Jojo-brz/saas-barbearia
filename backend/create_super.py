@@ -1,9 +1,8 @@
 import os
 from dotenv import load_dotenv
 from sqlalchemy.orm import Session
-from database import SessionLocal, engine
-from models import Barbershop, Base
-from database import SessionLocal, engine, Base
+from database import SessionLocal, engine, Base # Importação unificada
+from models import Barbershop # Base já vem do database
 
 # Carrega as variáveis do arquivo .env
 load_dotenv()

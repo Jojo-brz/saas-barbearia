@@ -22,27 +22,39 @@ export default function LoginPage() {
     formData.append("password", password);
 
     try {
-      const res = await fetch(`${API_URL}/token`, {
+      // 1. Mudamos a URL para a rota que existe no seu main.py
+      // 2. Mudamos para JSON, que é o que seu backend espera
+      const res = await fetch(`${API_URL}/auth/login-admin`, {
         method: "POST",
-        body: formData,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: email, // Certifique-se que o nome da variável aqui é email
+          password: password, // Certifique-se que o nome da variável aqui é password
+        }),
       });
+
       if (res.ok) {
         const data = await res.json();
-        localStorage.setItem("barber_token", data.access_token);
-        localStorage.setItem("barber_slug", data.slug);
-        localStorage.setItem("barber_role", data.role);
-        toast.success("Login realizado com sucesso!");
-        setTimeout(() => {
-          if (data.role === "admin") router.push("/super-admin");
-          else router.push(`/admin/${data.slug}`);
-        }, 1000);
+
+        // Salva os dados para usar depois
+        localStorage.setItem("user", JSON.stringify(data.user));
+        localStorage.setItem("slug", data.slug);
+
+        // Redireciona baseado no cargo (Role) que definimos no main.py
+        if (data.user.role === "SUPER_ADMIN") {
+          window.location.href = "/super-admin";
+        } else {
+          window.location.href = `/admin/${data.slug}`;
+        }
       } else {
-        toast.error("E-mail ou senha incorretos.");
+        const errorData = await res.json();
+        alert(errorData.detail || "Falha no login");
       }
-    } catch {
-      toast.error("Erro ao conectar com o servidor.");
-    } finally {
-      setLoading(false);
+    } catch (error) {
+      console.error("Erro ao fazer login:", error);
+      alert("Erro de conexão com o servidor.");
     }
   };
 
@@ -63,9 +75,14 @@ export default function LoginPage() {
       });
       if (res.ok) {
         const data = await res.json();
-        localStorage.setItem("barber_token", data.access_token);
-        localStorage.setItem("barber_slug", data.slug);
-        localStorage.setItem("barber_role", data.role);
+        localStorage.setItem("user", JSON.stringify(data.user));
+        localStorage.setItem("slug", data.slug);
+
+        if (data.user.role === "SUPER_ADMIN") {
+          router.push("/super-admin");
+        } else {
+          router.push(`/admin/${data.slug}`);
+        }
 
         toast.success("Acesso de demonstração liberado!", {
           style: {

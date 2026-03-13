@@ -3,16 +3,32 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from sqlalchemy import select
-from typing import List
 import shutil
 import os
 import uuid
+import datetime
 
 # Importações dos seus arquivos locais
 from database import engine, get_db, Base
 from models import Barbershop, Barber, Service, Appointment, Transaction
 
-app = FastAPI(title="SaaS Barbearia API - Completa")
+app = FastAPI(title="SaaS Barbearia API - Sistema Completo")
+
+# --- 1. SEGURANÇA E COMUNICAÇÃO ---
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], 
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+UPLOAD_DIR = "uploads"
+if not os.path.exists(UPLOAD_DIR):
+    os.makedirs(UPLOAD_DIR)
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+
+Base.metadata.create_all(bind=engine)
 
 @app.get("/")
 def read_root():
@@ -20,33 +36,14 @@ def read_root():
         "status": "online",
         "message": "SaaS Barbearia API rodando com sucesso!",
         "version": "1.0.0",
-        "docs": "/docs" # Atalho para você lembrar onde está a documentação automática
+        "docs": "/docs"
     }
 
 @app.get("/health")
 def health_check():
-    """Rota técnica para serviços de hospedagem verificarem se o app está vivo"""
     return {"status": "healthy"}
 
-# --- SEGURANÇA E COMUNICAÇÃO ---
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Servir arquivos estáticos (Logos e Fotos) para que o Frontend consiga exibir
-UPLOAD_DIR = "uploads"
-if not os.path.exists(UPLOAD_DIR):
-    os.makedirs(UPLOAD_DIR)
-app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
-
-# Cria as tabelas
-Base.metadata.create_all(bind=engine)
-
-# --- 1. AUTENTICAÇÃO ---
+# --- 2. AUTENTICAÇÃO ---
 
 @app.post("/auth/login-admin")
 def login_admin(data: dict, db: Session = Depends(get_db)):
@@ -62,7 +59,7 @@ def login_admin(data: dict, db: Session = Depends(get_db)):
 
 @app.post("/auth/verify-pin")
 def verify_pin(data: dict, db: Session = Depends(get_db)):
-    pin = data.get("pin")
+    pin = str(data.get("pin"))
     slug = data.get("slug")
     shop = db.query(Barbershop).filter(Barbershop.slug == slug).first()
     if not shop: raise HTTPException(status_code=404)
@@ -72,7 +69,7 @@ def verify_pin(data: dict, db: Session = Depends(get_db)):
     
     return {"user": {"id": barber.id, "name": barber.name, "role": barber.role}, "slug": shop.slug}
 
-# --- 2. SUPER ADMIN (Controle do SaaS) ---
+# --- 3. SUPER ADMIN (CONTROLE DO SAAS) ---
 
 @app.get("/super/barbershops")
 def list_shops(db: Session = Depends(get_db)):
@@ -80,20 +77,111 @@ def list_shops(db: Session = Depends(get_db)):
 
 @app.post("/super/barbershops")
 def create_shop(data: dict, db: Session = Depends(get_db)):
-    new_shop = Barbershop(**data)
-    db.add(new_shop)
+    # Validação de Unicidade
+    if db.query(Barbershop).filter(Barbershop.slug == data.get("slug")).first():
+        raise HTTPException(status_code=400, detail="Slug já existe")
+
+    try:
+        new_shop = Barbershop(
+            name=data.get("name"),
+            slug=data.get("slug"),
+            owner_email=data.get("owner_email"),
+            password_hash=data.get("password_hash"),
+            description=data.get("description", ""),
+            address=data.get("address", ""),
+            is_active=True
+        )
+        db.add(new_shop)
+        db.flush() 
+
+        # Integração: Cria o CEO automaticamente para o modal de equipe não vir vazio
+        new_ceo = Barber(
+            name=f"Admin {new_shop.name}",
+            role="OWNER",
+            pin=data.get("initial_pin", "1234"),
+            barbershop_id=new_shop.id
+        )
+        db.add(new_ceo)
+        
+        db.commit()
+        db.refresh(new_shop)
+        return new_shop
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.put("/super/barbershops/{shop_id}")
+@app.patch("/super/barbershops/{shop_id}")
+def update_barbershop(shop_id: int, data: dict, db: Session = Depends(get_db)):
+    """Rota unificada para editar Nome, Email, Slug e Status da barbearia"""
+    shop = db.query(Barbershop).get(shop_id)
+    if not shop: raise HTTPException(status_code=404)
+
+    for key, value in data.items():
+        if hasattr(shop, key):
+            setattr(shop, key, value)
+    
     db.commit()
-    db.refresh(new_shop)
-    return new_shop
+    db.refresh(shop)
+    return shop
 
 @app.delete("/super/barbershops/{shop_id}")
 def delete_shop(shop_id: int, db: Session = Depends(get_db)):
     shop = db.query(Barbershop).get(shop_id)
+    if not shop: raise HTTPException(status_code=404)
     db.delete(shop)
     db.commit()
     return {"ok": True}
 
-# --- 3. GESTÃO DA BARBEARIA (CEO) ---
+# --- 4. GESTÃO DE EQUIPE (BARBEIROS) ---
+
+@app.get("/barbershops/{slug}/barbers")
+def list_barbers(slug: str, db: Session = Depends(get_db)):
+    shop = db.query(Barbershop).filter(Barbershop.slug == slug).first()
+    if not shop: raise HTTPException(status_code=404)
+    return shop.barbers
+
+@app.post("/admin/barbers/")
+def add_barber(data: dict, db: Session = Depends(get_db)):
+    # Validação de PIN Único por barbearia
+    shop_id = data.get("barbershop_id")
+    pin = str(data.get("pin"))
+    exists = db.query(Barber).filter(Barber.barbershop_id == shop_id, Barber.pin == pin).first()
+    if exists:
+        raise HTTPException(status_code=400, detail="PIN já em uso nesta barbearia.")
+
+    new_barber = Barber(
+        name=data.get("name"),
+        role=data.get("role", "BARBER"),
+        pin=pin,
+        barbershop_id=shop_id
+    )
+    db.add(new_barber)
+    db.commit()
+    return new_barber
+
+@app.put("/admin/barbers/{barber_id}")
+def update_barber(barber_id: int, data: dict, db: Session = Depends(get_db)):
+    barber = db.query(Barber).get(barber_id)
+    if not barber: raise HTTPException(status_code=404)
+    
+    for key, value in data.items():
+        if hasattr(barber, key):
+            setattr(barber, key, value)
+    
+    db.commit()
+    db.refresh(barber)
+    return barber
+
+@app.delete("/admin/barbers/{barber_id}")
+def remove_barber(barber_id: int, db: Session = Depends(get_db)):
+    barber = db.query(Barber).get(barber_id)
+    if not barber: raise HTTPException(status_code=404)
+    db.delete(barber)
+    db.commit()
+    return {"ok": True}
+
+# --- 5. SERVIÇOS, AGENDAMENTOS E CAIXA ---
 
 @app.get("/admin/{slug}/dashboard")
 def get_dashboard(slug: str, db: Session = Depends(get_db)):
@@ -107,30 +195,17 @@ def get_dashboard(slug: str, db: Session = Depends(get_db)):
         "shop_id": shop.id
     }
 
-# Rotas de Equipe (Barbeiros)
-@app.post("/barbers")
-def add_barber(data: dict, db: Session = Depends(get_db)):
-    new_barber = Barber(**data)
-    db.add(new_barber)
-    db.commit()
-    return new_barber
-
-@app.delete("/barbers/{barber_id}")
-def remove_barber(barber_id: int, db: Session = Depends(get_db)):
-    barber = db.query(Barber).get(barber_id)
-    db.delete(barber)
-    db.commit()
-    return {"ok": True}
-
-# Rotas de Serviços
 @app.post("/services")
 def add_service(data: dict, db: Session = Depends(get_db)):
-    new_service = Service(**data)
+    new_service = Service(
+        name=data.get("name"),
+        price=float(data.get("price")),
+        duration=int(data.get("duration")),
+        barbershop_id=data.get("barbershop_id")
+    )
     db.add(new_service)
     db.commit()
     return new_service
-
-# --- 4. FLUXO DE CAIXA E AGENDAMENTOS ---
 
 @app.post("/appointments")
 def create_appointment(data: dict, db: Session = Depends(get_db)):
@@ -146,7 +221,7 @@ def add_cash(data: dict, db: Session = Depends(get_db)):
     db.commit()
     return {"status": "success"}
 
-# --- 5. UPLOAD DE LOGO ---
+# --- 6. UPLOAD E PÚBLICO ---
 
 @app.post("/upload-logo/{shop_id}")
 async def upload_logo(shop_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
@@ -160,8 +235,7 @@ async def upload_logo(shop_id: int, file: UploadFile = File(...), db: Session = 
     db.commit()
     return {"url": shop.logo_url}
 
-# --- 6. ROTA PÚBLICA (CLIENTE) ---
-@app.get("/barbershops/{slug}")
+@app.get("/barbershops/{slug}/public")
 def get_public_data(slug: str, db: Session = Depends(get_db)):
     shop = db.query(Barbershop).filter(Barbershop.slug == slug).first()
     if not shop: raise HTTPException(status_code=404)

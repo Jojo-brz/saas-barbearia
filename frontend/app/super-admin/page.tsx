@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-
 "use client";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -10,7 +9,8 @@ interface Barbershop {
   id: number;
   name: string;
   slug: string;
-  email: string;
+  owner_email: string;
+  email?: string;
   is_active: boolean;
 }
 
@@ -19,7 +19,7 @@ export default function SuperAdminPanel() {
   const [shops, setShops] = useState<Barbershop[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Estados para Adicionar Equipe
+  // Estados para Equipe
   const [managingTeamShop, setManagingTeamShop] = useState<Barbershop | null>(
     null,
   );
@@ -28,115 +28,116 @@ export default function SuperAdminPanel() {
   const [newMemberPin, setNewMemberPin] = useState("");
   const [newMemberRole, setNewMemberRole] = useState("BARBER");
 
-  // Form Criar (Agora com CEO)
+  // Estados do Formulário Criar
   const [newName, setNewName] = useState("");
   const [newSlug, setNewSlug] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
-  const [newCeoName, setNewCeoName] = useState(""); // <-- NOVO
-  const [newCeoPin, setNewCeoPin] = useState(""); // <-- NOVO
+  const [newCeoName, setNewCeoName] = useState("");
+  const [newCeoPin, setNewCeoPin] = useState("");
 
-  // Form Editar
+  // Estados do Formulário Editar
   const [editingShop, setEditingShop] = useState<Barbershop | null>(null);
   const [editName, setEditName] = useState("");
   const [editSlug, setEditSlug] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editPassword, setEditPassword] = useState("");
 
-  const getToken = () => localStorage.getItem("barber_token");
   const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
   useEffect(() => {
-    if (localStorage.getItem("barber_role") !== "admin") {
-      router.push("/login");
+    const storedUser = localStorage.getItem("user");
+    if (!storedUser) {
+      window.location.href = "/login";
       return;
     }
-    fetchShops();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const user = JSON.parse(storedUser);
+    if (user.role !== "SUPER_ADMIN") {
+      window.location.href = "/login";
+    } else {
+      fetchShops();
+    }
   }, []);
 
   const fetchShops = async () => {
     try {
-      const res = await fetch(`${API_URL}/admin/shops`, {
-        headers: { Authorization: `Bearer ${getToken()}` },
-      });
-      if (res.ok) setShops(await res.json());
+      const res = await fetch(`${API_URL}/super/barbershops`);
+      if (res.ok) {
+        const data = await res.json();
+        setShops(data);
+      }
     } catch {
       toast.error("Erro ao carregar lojas");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleCreateShop = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await fetch(`${API_URL}/barbershops/`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${getToken()}`,
-      },
-      body: JSON.stringify({
-        name: newName,
-        slug: newSlug.toLowerCase().replace(/\s/g, "-"),
-        email: newEmail,
-        password: newPassword,
-        ceo_name: newCeoName, // <-- Enviando CEO para o backend
-        ceo_pin: newCeoPin, // <-- Enviando PIN para o backend
-      }),
-    });
-    if (res.ok) {
-      toast.success("Barbearia e CEO criados com sucesso!");
-      setNewName("");
-      setNewSlug("");
-      setNewEmail("");
-      setNewPassword("");
-      setNewCeoName(""); // <-- Limpando
-      setNewCeoPin(""); // <-- Limpando
-      fetchShops();
-    } else {
-      const err = await res.json();
-      toast.error("Erro: " + (err.detail || "Falha ao criar"));
+    const data = {
+      name: newName,
+      slug: newSlug,
+      owner_email: newEmail,
+      password_hash: newPassword,
+      ceo_name: newCeoName,
+      ceo_pin: newCeoPin,
+    };
+
+    try {
+      const res = await fetch(`${API_URL}/super/barbershops`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+
+      if (res.ok) {
+        toast.success("Barbearia criada!");
+        setNewName("");
+        setNewSlug("");
+        setNewEmail("");
+        setNewPassword("");
+        setNewCeoName("");
+        setNewCeoPin("");
+        fetchShops();
+      } else {
+        const err = await res.json();
+        toast.error(err.detail || "Erro ao criar");
+      }
+    } catch {
+      toast.error("Erro de conexão");
     }
   };
 
+  // FUNÇÕES DE EQUIPE CORRIGIDAS
   const openTeamModal = async (shop: Barbershop) => {
     setManagingTeamShop(shop);
-    fetchShopTeam(shop.slug);
+    fetchShopTeam(shop.slug); // Usando slug conforme seu backend pede
   };
 
   const fetchShopTeam = async (slug: string) => {
+    if (!slug) return;
+    const token = localStorage.getItem("barber_token");
+
     try {
-      const res = await fetch(`${API_URL}/barbershops/${slug}/barbers`);
-      if (res.ok) setShopTeam(await res.json());
-    } catch {
-      toast.error("Erro ao carregar equipe");
-    }
-  };
+      // Rota corrigida para bater com o padrão de slugs do seu backend
+      const res = await fetch(`${API_URL}/barbershops/${slug}/barbers`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
 
-  const handleDeleteMember = async (barberId: number) => {
-    if (!confirm("Tem a certeza que deseja remover este profissional?")) return;
-    const res = await fetch(`${API_URL}/admin/barbers/${barberId}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${getToken()}` },
-    });
-    if (res.ok) {
-      toast.success("Profissional removido!");
-      fetchShopTeam(managingTeamShop!.slug);
-    }
-  };
-
-  const handleChangeRole = async (barberId: number, newRole: string) => {
-    const res = await fetch(`${API_URL}/admin/barbers/${barberId}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${getToken()}`,
-      },
-      body: JSON.stringify({ role: newRole }),
-    });
-    if (res.ok) {
-      toast.success("Cargo atualizado!");
-      fetchShopTeam(managingTeamShop!.slug);
+      if (res.ok) {
+        const data = await res.json();
+        setShopTeam(data); // O backend retorna a lista de objetos
+      } else {
+        console.error("Erro ao puxar equipe. Status:", res.status);
+        setShopTeam([]);
+      }
+    } catch (error) {
+      console.error("Falha no fetch:", error);
     }
   };
 
@@ -144,28 +145,73 @@ export default function SuperAdminPanel() {
     e.preventDefault();
     if (!managingTeamShop) return;
 
-    const res = await fetch(`${API_URL}/admin/barbers/`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${getToken()}`,
-      },
-      body: JSON.stringify({
-        name: newMemberName,
-        role: newMemberRole,
-        pin: newMemberPin,
-        barbershop_id: managingTeamShop.id,
-      }),
-    });
+    const token = localStorage.getItem("barber_token");
 
+    // O 422 geralmente acontece aqui: o corpo do JSON precisa ser exato
+    const payload = {
+      name: newMemberName,
+      role: newMemberRole,
+      pin: newMemberPin,
+      barbershop_id: Number(managingTeamShop.id), // Garante que é um número
+    };
+
+    try {
+      const res = await fetch(`${API_URL}/admin/barbers/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`, // Sem isso, o backend bloqueia
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        toast.success("Profissional adicionado!");
+        setNewMemberName("");
+        setNewMemberPin("");
+        fetchShopTeam(managingTeamShop.slug); // Recarrega a lista
+      } else {
+        const errorData = await res.json();
+        // Isso vai te mostrar no toast exatamente qual campo o backend rejeitou
+        toast.error(errorData.detail?.[0]?.msg || "Erro ao adicionar");
+      }
+    } catch (error) {
+      toast.error("Erro de comunicação com o servidor");
+    }
+  };
+
+  const handleDeleteMember = async (barberId: number) => {
+    if (!confirm("Remover este profissional?")) return;
+    const res = await fetch(`${API_URL}/admin/barbers/${barberId}`, {
+      method: "DELETE",
+    });
     if (res.ok) {
-      toast.success("Profissional adicionado!");
-      setNewMemberName("");
-      setNewMemberPin("");
-      setNewMemberRole("BARBER");
-      fetchShopTeam(managingTeamShop.slug); // Recarrega a lista na hora!
-    } else {
-      toast.error("Erro ao adicionar membro");
+      toast.success("Removido!");
+      if (managingTeamShop) fetchShopTeam(managingTeamShop.slug);
+    }
+  };
+
+  const handleChangeRole = async (barberId: number, newRole: string) => {
+    const token = localStorage.getItem("barber_token");
+
+    try {
+      const res = await fetch(`${API_URL}/admin/barbers/${barberId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ role: newRole }), // Envia o novo cargo (OWNER ou BARBER)
+      });
+
+      if (res.ok) {
+        toast.success("Cargo atualizado!");
+        if (managingTeamShop) fetchShopTeam(managingTeamShop.slug); // Recarrega a lista
+      } else {
+        toast.error("Erro ao mudar cargo");
+      }
+    } catch (error) {
+      console.error(error);
     }
   };
 
@@ -173,52 +219,43 @@ export default function SuperAdminPanel() {
     setEditingShop(shop);
     setEditName(shop.name);
     setEditSlug(shop.slug);
-    setEditEmail(shop.email);
+    setEditEmail(shop.owner_email || shop.email || "");
     setEditPassword("");
   };
 
   const handleUpdateShop = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingShop) return;
+    const body: any = {
+      name: editName,
+      slug: editSlug,
+      owner_email: editEmail,
+    };
+    if (editPassword) body.password_hash = editPassword;
 
-    const body: any = { name: editName, slug: editSlug, email: editEmail };
-    if (editPassword) body.password = editPassword;
-
-    const res = await fetch(`${API_URL}/admin/barbershops/${editingShop.id}`, {
+    const res = await fetch(`${API_URL}/super/barbershops/${editingShop.id}`, {
       method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${getToken()}`,
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
 
     if (res.ok) {
-      toast.success("Barbearia atualizada!");
+      toast.success("Atualizada!");
       setEditingShop(null);
       fetchShops();
-    } else {
-      const err = await res.json();
-      toast.error("Erro: " + (err.detail || "Falha ao atualizar"));
     }
   };
 
   const toggleStatus = async (id: number) => {
-    await fetch(`${API_URL}/admin/toggle_status/${id}`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${getToken()}` },
-    });
+    await fetch(`${API_URL}/super/toggle_status/${id}`, { method: "POST" });
     toast.success("Status alterado!");
     fetchShops();
   };
 
   const deleteShop = async (id: number) => {
-    if (confirm("Tem certeza? Essa ação é irreversível.")) {
-      await fetch(`${API_URL}/admin/barbershops/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${getToken()}` },
-      });
-      toast.success("Barbearia excluída.");
+    if (confirm("Tem certeza?")) {
+      await fetch(`${API_URL}/super/barbershops/${id}`, { method: "DELETE" });
+      toast.success("Excluída.");
       fetchShops();
     }
   };
@@ -229,11 +266,7 @@ export default function SuperAdminPanel() {
   };
 
   if (loading)
-    return (
-      <div className="p-10 text-center text-white">
-        Carregando painel mestre...
-      </div>
-    );
+    return <div className="p-10 text-center text-white">Carregando...</div>;
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white p-8 font-sans">
@@ -251,58 +284,56 @@ export default function SuperAdminPanel() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* CRIAR */}
           <div className="bg-zinc-900 p-6 rounded-lg h-fit border border-zinc-800 shadow-lg">
             <h2 className="text-xl font-bold mb-4 uppercase tracking-wide text-zinc-100">
               Nova Barbearia
             </h2>
             <form onSubmit={handleCreateShop} className="space-y-4">
               <input
-                className="w-full bg-zinc-800 p-3 rounded text-white border border-zinc-700 focus:border-white outline-none placeholder-zinc-500"
+                className="w-full bg-zinc-800 p-3 rounded text-white border border-zinc-700 focus:border-white outline-none"
                 placeholder="Nome da Barbearia"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 required
               />
               <input
-                className="w-full bg-zinc-800 p-3 rounded text-white border border-zinc-700 focus:border-white outline-none placeholder-zinc-500"
-                placeholder="Slug (Ex: barbearia-vintage)"
+                className="w-full bg-zinc-800 p-3 rounded text-white border border-zinc-700 focus:border-white outline-none"
+                placeholder="Slug"
                 value={newSlug}
                 onChange={(e) => setNewSlug(e.target.value)}
                 required
               />
               <input
-                className="w-full bg-zinc-800 p-3 rounded text-white border border-zinc-700 focus:border-white outline-none placeholder-zinc-500"
-                placeholder="Email de Login"
+                className="w-full bg-zinc-800 p-3 rounded text-white border border-zinc-700 focus:border-white outline-none"
+                placeholder="Email"
                 type="email"
                 value={newEmail}
                 onChange={(e) => setNewEmail(e.target.value)}
                 required
               />
               <input
-                className="w-full bg-zinc-800 p-3 rounded text-white border border-zinc-700 focus:border-white outline-none placeholder-zinc-500"
-                placeholder="Senha de Login"
+                className="w-full bg-zinc-800 p-3 rounded text-white border border-zinc-700 focus:border-white outline-none"
+                placeholder="Senha"
+                type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 required
               />
-
-              {/* === NOVOS CAMPOS DO CEO === */}
-              <div className="border-t border-zinc-800 pt-4 mt-2 mb-2">
+              <div className="border-t border-zinc-800 pt-4">
                 <p className="text-xs text-zinc-400 font-bold uppercase mb-3">
-                  Dados do Dono (CEO)
+                  Dados do Dono
                 </p>
                 <div className="grid grid-cols-2 gap-3">
                   <input
-                    className="w-full bg-zinc-800 p-3 rounded text-white border border-zinc-700 focus:border-white outline-none placeholder-zinc-500"
+                    className="w-full bg-zinc-800 p-3 rounded text-white border border-zinc-700 focus:border-white outline-none"
                     placeholder="Nome"
                     value={newCeoName}
                     onChange={(e) => setNewCeoName(e.target.value)}
                     required
                   />
                   <input
-                    className="w-full bg-zinc-800 p-3 rounded text-white border border-zinc-700 focus:border-white outline-none placeholder-zinc-500 text-center tracking-widest"
-                    placeholder="PIN (4 dig)"
+                    className="w-full bg-zinc-800 p-3 rounded text-white border border-zinc-700 text-center"
+                    placeholder="PIN"
                     type="password"
                     maxLength={4}
                     value={newCeoPin}
@@ -313,30 +344,25 @@ export default function SuperAdminPanel() {
                   />
                 </div>
               </div>
-
-              <button className="w-full bg-green-600 py-3 rounded font-bold hover:bg-green-500 uppercase tracking-wide text-sm shadow-md transition-all hover:scale-[1.02]">
+              <button className="w-full bg-green-600 py-3 rounded font-bold hover:bg-green-500 uppercase text-sm">
                 Cadastrar
               </button>
             </form>
           </div>
 
-          {/* LISTAR */}
           <div className="lg:col-span-2 space-y-4">
-            <h2 className="text-xl font-bold mb-4 uppercase tracking-wide text-zinc-100">
+            <h2 className="text-xl font-bold mb-4 uppercase text-zinc-100">
               Lojas Ativas ({shops.length})
             </h2>
             {shops.map((shop) => (
               <div
                 key={shop.id}
-                className="bg-zinc-900 p-4 rounded-lg border border-zinc-800 flex flex-col sm:flex-row justify-between items-start sm:items-center hover:border-zinc-600 transition-all shadow-md gap-4 sm:gap-0"
+                className="bg-zinc-900 p-4 rounded-lg border border-zinc-800 flex flex-col sm:flex-row justify-between items-center gap-4"
               >
-                {/* INFORMAÇÕES DA LOJA */}
-                <div className="w-full sm:w-auto">
-                  <div className="font-bold text-lg text-white">
-                    {shop.name}
-                  </div>
-                  <div className="text-zinc-500 text-sm font-mono break-all">
-                    /{shop.slug} • {shop.email}
+                <div>
+                  <div className="font-bold text-lg">{shop.name}</div>
+                  <div className="text-zinc-500 text-sm">
+                    /{shop.slug} • {shop.owner_email}
                   </div>
                   <div
                     className={`text-xs mt-1 font-bold ${shop.is_active ? "text-green-400" : "text-red-400"}`}
@@ -344,248 +370,180 @@ export default function SuperAdminPanel() {
                     {shop.is_active ? "ATIVO" : "SUSPENSO"}
                   </div>
                 </div>
-
-                {/* BOTÕES DE AÇÃO (Responsivos) */}
-                <div className="flex flex-wrap sm:flex-nowrap gap-2 w-full sm:w-auto">
+                <div className="flex gap-2 w-full sm:w-auto">
                   <button
                     onClick={() => openTeamModal(shop)}
-                    className="flex-1 sm:flex-none bg-blue-600 text-white text-xs px-3 py-2.5 rounded hover:bg-blue-500 uppercase font-bold text-center"
-                    title="Gerenciar Equipe"
+                    className="flex-1 bg-blue-600 text-white text-xs px-3 py-2.5 rounded font-bold"
                   >
                     👥 Equipe
                   </button>
-
                   <button
                     onClick={() => openEditModal(shop)}
-                    className="bg-yellow-600 text-white text-xs px-3 py-2.5 rounded hover:bg-yellow-500 uppercase font-bold"
-                    title="Editar"
+                    className="bg-yellow-600 text-white text-xs px-3 py-2.5 rounded font-bold"
                   >
                     ✏️
                   </button>
-
                   <button
-                    onClick={() => toggleStatus(shop.id)}
-                    className="flex-1 sm:flex-none bg-zinc-700 text-white text-xs px-3 py-2.5 rounded hover:bg-zinc-600 uppercase font-bold sm:w-24 text-center"
+                    onClick={() => toggleStatus(Number(shop.id))}
+                    className="bg-zinc-700 text-white text-xs px-3 py-2.5 rounded font-bold"
                   >
                     {shop.is_active ? "Suspender" : "Ativar"}
                   </button>
-
                   <button
-                    onClick={() => deleteShop(shop.id)}
-                    className="bg-red-600 text-white text-xs px-3 py-2.5 rounded hover:bg-red-500 uppercase font-bold"
-                    title="Excluir"
+                    onClick={() => deleteShop(Number(shop.id))}
+                    className="bg-red-600 text-white text-xs px-3 py-2.5 rounded font-bold"
                   >
-                    🗑️
+                    <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
               </div>
             ))}
           </div>
         </div>
-        {/* MODAL DE ADICIONAR EQUIPE */}
-        {/* MODAL DE GERENCIAR EQUIPE */}
+
         {managingTeamShop && (
           <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-            <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-inner">
+            <div className="bg-zinc-950 p-6 rounded-xl border border-zinc-800 w-full max-w-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-6 border-b border-zinc-800 pb-2">
-                <h2 className="text-xl font-bold text-white uppercase flex items-center gap-2">
-                  👑 Gestão de Equipe:{" "}
+                <h2 className="text-xl font-bold text-white uppercase">
+                  Gestão:{" "}
                   <span className="text-cyan-500">{managingTeamShop.name}</span>
                 </h2>
                 <button
                   onClick={() => setManagingTeamShop(null)}
-                  className="text-zinc-400 hover:text-white text-3xl font-light"
+                  className="text-zinc-400 text-3xl"
                 >
                   ×
                 </button>
               </div>
-
-              {/* 1. LISTA DE MEMBROS ATUAIS */}
-              <div className="mb-8">
-                <h3 className="text-xs text-zinc-400 font-bold uppercase tracking-widest mb-3 flex items-center justify-between">
-                  <span>Profissionais Ativos ({shopTeam.length})</span>
-                </h3>
-
-                {/* Aqui definimos as colunas: 1 no mobile, 2 no desktop */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {shopTeam.map((member) => (
-                    <div
-                      key={member.id}
-                      className="bg-zinc-950 p-4 rounded-xl border border-zinc-800 flex flex-col justify-between shadow-inner group hover:border-zinc-700 transition-colors"
-                    >
-                      {/* Topo: Nome e Iniciais */}
-                      <div className="flex items-start gap-3 mb-4">
-                        <div className="w-10 h-10 bg-linear-to-br from-zinc-800 to-zinc-900 rounded-full border border-zinc-700 flex items-center justify-center text-zinc-400 font-bold shadow-inner shrink-0">
-                          {member.name.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h4 className="text-white font-bold truncate text-sm">
-                            {member.name}
-                          </h4>
-                          <p className="text-[10px] text-zinc-500 font-mono mt-0.5 tracking-widest">
-                            PIN: {member.pin}
-                          </p>
-                        </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8">
+                {shopTeam.map((member) => (
+                  <div
+                    key={member.id}
+                    className="bg-zinc-900 p-4 rounded-xl border border-zinc-800 flex flex-col justify-between"
+                  >
+                    <div className="flex items-start gap-3 mb-4">
+                      <div className="w-10 h-10 bg-zinc-800 rounded-full flex items-center justify-center text-zinc-400 font-bold">
+                        {member.name.charAt(0).toUpperCase()}
                       </div>
-
-                      {/* Base: Botões Compactos (Cargo e Excluir) */}
-                      <div className="flex justify-between items-center pt-3 border-t border-zinc-800/50">
-                        <select
-                          className={`text-[10px] font-bold py-1.5 px-2 rounded border outline-none cursor-pointer transition-colors ${
-                            member.role === "OWNER"
-                              ? "bg-yellow-500/10 text-yellow-500 border-yellow-500/30 hover:bg-yellow-500/20"
-                              : "bg-zinc-800 text-zinc-300 border-zinc-700 hover:bg-zinc-700"
-                          }`}
-                          value={member.role}
-                          onChange={(e) =>
-                            handleChangeRole(member.id, e.target.value)
-                          }
-                        >
-                          <option value="BARBER">BARBEIRO</option>
-                          <option value="OWNER">CEO (DONO)</option>
-                        </select>
-
-                        <button
-                          onClick={() => handleDeleteMember(member.id)}
-                          className="p-1.5 bg-red-500/10 text-red-500 rounded border border-red-500/20 hover:bg-red-600 hover:text-white transition-colors"
-                          title="Demitir / Remover"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                      <div className="flex-1">
+                        <h4 className="text-white font-bold text-sm">
+                          {member.name}
+                        </h4>
+                        <p className="text-[10px] text-zinc-500">
+                          PIN: {member.pin}
+                        </p>
                       </div>
                     </div>
-                  ))}
-                </div>
-
-                {shopTeam.length === 0 && (
-                  <div className="bg-zinc-950 border border-zinc-800 border-dashed rounded-xl p-6 text-center">
-                    <p className="text-zinc-600 text-sm italic">
-                      Nenhum profissional cadastrado nesta loja.
-                    </p>
+                    <div className="flex justify-between items-center pt-3 border-t border-zinc-800">
+                      <select
+                        className="text-[10px] bg-zinc-800 text-white p-1 rounded"
+                        value={member.role}
+                        onChange={(e) =>
+                          handleChangeRole(member.id, e.target.value)
+                        }
+                      >
+                        <option value="BARBER">BARBEIRO</option>
+                        <option value="OWNER">CEO (DONO)</option>
+                      </select>
+                      <button
+                        onClick={() => handleDeleteMember(member.id)}
+                        className="text-red-500"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
-                )}
+                ))}
               </div>
-
-              {/* 2. ADICIONAR NOVO MEMBRO */}
-              <div className="border-t border-zinc-800 pt-6">
-                <h3 className="text-xs text-zinc-400 font-bold uppercase tracking-widest mb-4">
-                  ➕ Contratar Novo Profissional
-                </h3>
-
-                <form
-                  onSubmit={handleAddTeamMember}
-                  className="grid grid-cols-1 md:grid-cols-2 gap-4"
+              <form
+                onSubmit={handleAddTeamMember}
+                className="border-t border-zinc-800 pt-6 grid grid-cols-1 md:grid-cols-2 gap-4"
+              >
+                <input
+                  className="bg-zinc-800 p-3 rounded-lg text-white border border-zinc-700"
+                  placeholder="Nome"
+                  value={newMemberName}
+                  onChange={(e) => setNewMemberName(e.target.value)}
+                  required
+                />
+                <input
+                  className="bg-zinc-800 p-3 rounded-lg text-white border border-zinc-700"
+                  placeholder="PIN"
+                  type="password"
+                  maxLength={4}
+                  value={newMemberPin}
+                  onChange={(e) =>
+                    setNewMemberPin(e.target.value.replace(/\D/g, ""))
+                  }
+                  required
+                />
+                <select
+                  className="bg-zinc-800 p-3 rounded-lg text-white border border-zinc-700 md:col-span-2"
+                  value={newMemberRole}
+                  onChange={(e) => setNewMemberRole(e.target.value)}
                 >
-                  <input
-                    className="w-full bg-zinc-800 p-3 rounded-lg text-white border border-zinc-700 focus:border-cyan-500 outline-none"
-                    placeholder="Nome do Profissional"
-                    value={newMemberName}
-                    onChange={(e) => setNewMemberName(e.target.value)}
-                    required
-                  />
-                  <input
-                    className="w-full bg-zinc-800 p-3 rounded-lg text-white border border-zinc-700 focus:border-cyan-500 outline-none font-mono tracking-widest"
-                    placeholder="PIN (4 dígitos)"
-                    type="password"
-                    maxLength={4}
-                    value={newMemberPin}
-                    onChange={(e) =>
-                      setNewMemberPin(e.target.value.replace(/\D/g, ""))
-                    }
-                    required
-                  />
-                  <select
-                    className="w-full bg-zinc-800 p-3 rounded-lg text-white border border-zinc-700 focus:border-cyan-500 outline-none md:col-span-2"
-                    value={newMemberRole}
-                    onChange={(e) => setNewMemberRole(e.target.value)}
-                  >
-                    <option value="BARBER">
-                      BARBEIRO (Apenas acessa a própria agenda)
-                    </option>
-                    <option value="OWNER">
-                      CEO / SÓCIO (Acesso total ao Caixa e Configurações)
-                    </option>
-                  </select>
+                  <option value="BARBER">BARBEIRO</option>
+                  <option value="OWNER">CEO / SÓCIO</option>
+                </select>
+                <button
+                  type="submit"
+                  className="bg-cyan-600 py-3 rounded-lg font-bold md:col-span-2 uppercase"
+                >
+                  Adicionar
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
 
-                  <button
-                    type="submit"
-                    className="w-full bg-cyan-600 py-3.5 rounded-lg font-bold hover:bg-cyan-500 uppercase tracking-wide text-sm shadow-lg md:col-span-2 mt-2 transition-all"
-                  >
-                    Adicionar ao Sistema
-                  </button>
-                </form>
+        {editingShop && (
+          <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4">
+            <div className="bg-zinc-900 rounded-xl w-full max-w-md border border-zinc-700 p-6">
+              <div className="flex justify-between items-center mb-6 border-b border-zinc-800 pb-2">
+                <h2 className="text-xl font-bold text-white uppercase">
+                  Editar Loja
+                </h2>
+                <button
+                  onClick={() => setEditingShop(null)}
+                  className="text-zinc-400 text-2xl"
+                >
+                  ×
+                </button>
               </div>
+              <form onSubmit={handleUpdateShop} className="space-y-4">
+                <input
+                  className="w-full bg-zinc-800 p-3 rounded text-white border border-zinc-700"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  placeholder="Nome"
+                />
+                <input
+                  className="w-full bg-zinc-800 p-3 rounded text-white border border-zinc-700"
+                  value={editSlug}
+                  onChange={(e) => setEditSlug(e.target.value)}
+                  placeholder="Slug"
+                />
+                <input
+                  className="w-full bg-zinc-800 p-3 rounded text-white border border-zinc-700"
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  placeholder="E-mail"
+                />
+                <input
+                  className="w-full bg-zinc-800 p-3 rounded text-white border border-zinc-700"
+                  value={editPassword}
+                  onChange={(e) => setEditPassword(e.target.value)}
+                  placeholder="Senha (Opcional)"
+                />
+                <button className="w-full bg-green-600 py-3 rounded font-bold uppercase">
+                  Salvar
+                </button>
+              </form>
             </div>
           </div>
         )}
       </div>
-
-      {/* MODAL DE EDIÇÃO */}
-      {editingShop && (
-        <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-          <div className="bg-zinc-900 rounded-xl shadow-2xl w-full max-w-md border border-zinc-700 p-6">
-            <div className="flex justify-between items-center mb-6 border-b border-zinc-800 pb-2">
-              <h2 className="text-xl font-bold text-white uppercase">
-                Editar Loja
-              </h2>
-              <button
-                onClick={() => setEditingShop(null)}
-                className="text-zinc-400 hover:text-white text-2xl"
-              >
-                ×
-              </button>
-            </div>
-
-            <form onSubmit={handleUpdateShop} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">
-                  Nome da Barbearia
-                </label>
-                <input
-                  className="w-full bg-zinc-800 p-3 rounded text-white border border-zinc-700 focus:border-white outline-none"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">
-                  Slug (URL)
-                </label>
-                <input
-                  className="w-full bg-zinc-800 p-3 rounded text-white border border-zinc-700 focus:border-white outline-none"
-                  value={editSlug}
-                  onChange={(e) => setEditSlug(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">
-                  E-mail (Login)
-                </label>
-                <input
-                  className="w-full bg-zinc-800 p-3 rounded text-white border border-zinc-700 focus:border-white outline-none"
-                  value={editEmail}
-                  onChange={(e) => setEditEmail(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">
-                  Nova Senha (Opcional)
-                </label>
-                <input
-                  className="w-full bg-zinc-800 p-3 rounded text-white border border-zinc-700 focus:border-white outline-none"
-                  placeholder="Deixe vazio para manter a atual"
-                  value={editPassword}
-                  onChange={(e) => setEditPassword(e.target.value)}
-                />
-              </div>
-
-              <button className="w-full bg-green-600 py-3 rounded font-bold hover:bg-green-500 uppercase tracking-wide text-sm shadow-lg mt-4">
-                Salvar Alterações
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

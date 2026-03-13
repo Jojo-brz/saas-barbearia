@@ -43,159 +43,100 @@ export default function ServiceList({ services, shop }: ServiceListProps) {
   const [slots, setSlots] = useState<{ time: string; available: boolean }[]>(
     [],
   );
-
-  const [loading, setLoading] = useState(false);
   const [loadingSlots, setLoadingSlots] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [fetchingBarbers, setFetchingBarbers] = useState(false);
 
-  useEffect(() => {
-    fetch(`http://127.0.0.1:8000/barbershops/${shop.slug}/barbers`)
-      .then((res) => res.json())
-      .then((data) => setBarbers(data));
-  }, [shop.slug]);
-
-  const timeToMinutes = (time: string) => {
-    const [h, m] = time.split(":").map(Number);
-    return h * 60 + m;
-  };
-  const minutesToTime = (minutes: number) => {
-    const h = Math.floor(minutes / 60)
-      .toString()
-      .padStart(2, "0");
-    const m = (minutes % 60).toString().padStart(2, "0");
-    return `${h}:${m}`;
-  };
-
-  const generateSlots = useCallback(
-    async (dateStr: string) => {
-      if (!selectedService || !selectedBarber) return;
-      setLoadingSlots(true);
-      setSelectedTime("");
-      setSlots([]);
-
-      try {
-        const dateObj = new Date(dateStr + "T00:00:00");
-        const dayName = dateObj
-          .toLocaleDateString("en-US", { weekday: "long" })
-          .toLowerCase();
-        let config;
-        try {
-          config = JSON.parse(shop.hours_config);
-        } catch {
-          config = {};
-        }
-        const dayConfig = config[dayName];
-
-        if (!dayConfig || !dayConfig.active) {
-          setLoadingSlots(false);
-          return;
-        }
-
-        const res = await fetch(
-          `http://127.0.0.1:8000/barbershops/${shop.slug}/bookings`,
-        );
-        const allBookings: Booking[] = await res.json();
-
-        const busyIntervals = allBookings
-          .filter(
-            (b) =>
-              b.date_time.startsWith(dateStr) &&
-              b.barber_id === selectedBarber.id,
-          )
-          .map((b) => {
-            const timePart = b.date_time.split("T")[1];
-            const start = timeToMinutes(timePart);
-            return { start, end: start + b.service_duration };
-          });
-
-        let breakStartMin = -1,
-          breakEndMin = -1;
-        if (dayConfig.break_start && dayConfig.break_end) {
-          breakStartMin = timeToMinutes(dayConfig.break_start);
-          breakEndMin = timeToMinutes(dayConfig.break_end);
-        }
-
-        const generatedSlots = [];
-        const openMin = timeToMinutes(dayConfig.open);
-        const closeMin = timeToMinutes(dayConfig.close);
-
-        for (let current = openMin; current < closeMin; current += 15) {
-          // Step de 15min para mais opções
-          const slotStart = current;
-          const slotEnd = current + selectedService.duration;
-
-          if (slotEnd > closeMin) continue;
-
-          let isBusy = busyIntervals.some(
-            (busy) => slotStart < busy.end && slotEnd > busy.start,
-          );
-          if (!isBusy && breakStartMin !== -1) {
-            if (slotStart < breakEndMin && slotEnd > breakStartMin) {
-              isBusy = true;
-            }
-          }
-
-          generatedSlots.push({
-            time: minutesToTime(current),
-            available: !isBusy,
-          });
-        }
-        setSlots(generatedSlots);
-      } catch (error) {
-        console.error(error);
-        toast.error("Erro ao carregar agenda.");
-      } finally {
-        setLoadingSlots(false);
-      }
-    },
-    [selectedService, selectedBarber, shop.hours_config, shop.slug],
-  );
-
-  useEffect(() => {
-    if (selectedDate && shop && selectedService && selectedBarber)
-      generateSlots(selectedDate);
-  }, [selectedDate, shop, selectedService, selectedBarber, generateSlots]);
-
-  const handleBooking = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedService || !selectedBarber || !selectedDate || !selectedTime)
-      return;
-
-    setLoading(true);
-    try {
-      const response = await fetch("http://127.0.0.1:8000/bookings/", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customer_name: customerName,
-          customer_phone: customerPhone,
-          date_time: `${selectedDate}T${selectedTime}`,
-          barbershop_id: shop.id,
-          service_id: selectedService.id,
-          barber_id: selectedBarber.id,
-        }),
-      });
-
-      if (response.ok) {
-        toast.success("Agendamento confirmado!", { duration: 4000 });
-        handleCloseModal();
-      } else {
-        const err = await response.json();
-        toast.error(`Erro: ${err.detail}`);
-      }
-    } catch {
-      toast.error("Erro de conexão.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   const handleCloseModal = () => {
     setSelectedService(null);
     setSelectedBarber(null);
-    setCustomerName("");
-    setCustomerPhone("");
     setSelectedDate("");
     setSelectedTime("");
+    setCustomerName("");
+    setCustomerPhone("");
+  };
+
+  // Busca os barbeiros vinculados a esta barbearia específica
+  useEffect(() => {
+    const fetchBarbers = async () => {
+      setFetchingBarbers(true);
+      try {
+        // Rota pública que definimos no main.py para carregar dados da shop
+        const response = await fetch(`${API_URL}/barbershops/${shop.slug}`);
+        if (response.ok) {
+          const data = await response.json();
+          setBarbers(data.barbers || []);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar barbeiros:", error);
+      } finally {
+        setFetchingBarbers(false);
+      }
+    };
+
+    if (shop?.slug) fetchBarbers();
+  }, [shop.slug, API_URL]);
+
+  const generateSlots = useCallback(() => {
+    if (!selectedDate) return;
+    // Lógica simplificada de slots (Pode ser expandida conforme sua necessidade)
+    const times = [
+      "09:00",
+      "10:00",
+      "11:00",
+      "13:00",
+      "14:00",
+      "15:00",
+      "16:00",
+      "17:00",
+      "18:00",
+    ];
+    setSlots(times.map((t) => ({ time: t, available: true })));
+  }, [selectedDate]);
+
+  useEffect(() => {
+    generateSlots();
+  }, [generateSlots]);
+
+  const handleBooking = async () => {
+    if (!selectedService || !selectedBarber || !selectedDate || !selectedTime) {
+      toast.error("Preencha todos os campos!");
+      return;
+    }
+
+    setLoading(true);
+    const bookingData = {
+      customer_name: customerName,
+      customer_phone: customerPhone,
+      date_time: `${selectedDate}T${selectedTime}:00`,
+      service_id: selectedService.id,
+      barber_id: selectedBarber.id,
+      barbershop_id: shop.id, // Campo essencial para o Multi-tenant
+      status: "Pendente",
+    };
+
+    try {
+      const response = await fetch(`${API_URL}/appointments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(bookingData),
+      });
+
+      if (response.ok) {
+        toast.success("Agendamento realizado com sucesso!");
+        setSelectedService(null);
+        setCustomerName("");
+        setCustomerPhone("");
+      } else {
+        toast.error("Erro ao agendar. Tente outro horário.");
+      }
+    } catch (error) {
+      toast.error("Erro de conexão com o servidor.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

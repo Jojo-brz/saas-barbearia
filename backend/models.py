@@ -13,16 +13,14 @@ class Barbershop(Base):
     password_hash = Column(String, nullable=False)
     logo_url = Column(String, nullable=True)
     
-    # Novos campos para compatibilidade com o Frontend
     description = Column(Text, nullable=True)
     address = Column(String, nullable=True)
     instagram = Column(String, nullable=True)
-    is_active = Column(Boolean, default=True)
+    is_active = Column(Boolean, default=True) # Essencial para o Toggle do Super Admin
     
     # CAMPO DE SEGURANÇA MESTRE
     is_superadmin = Column(Boolean, default=False)
     
-    # Configuração de horários (Armazenado como JSON string)
     hours_config = Column(Text, nullable=True)
 
     # Relacionamentos
@@ -36,12 +34,10 @@ class Barber(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
-    photo_url = Column(String, nullable=True)
     role = Column(String, default="BARBER") # OWNER ou BARBER
+    pin = Column(String, nullable=False) # Mudado para String para aceitar pins como "0012"
+    is_active = Column(Boolean, default=True) # Novo: Permite suspender um barbeiro específico
     
-    # CAMPO PARA LOGIN DE EQUIPE
-    pin = Column(String, nullable=True) # Senha de 4 dígitos
-
     barbershop_id = Column(Integer, ForeignKey("barbershops.id"))
     barbershop = relationship("Barbershop", back_populates="barbers")
     appointments = relationship("Appointment", back_populates="barber")
@@ -52,11 +48,12 @@ class Service(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
     price = Column(Float, nullable=False)
-    duration = Column(Integer, nullable=False) # minutos
-    image_url = Column(String, nullable=True)
+    duration = Column(Integer, nullable=False) # em minutos
     
     barbershop_id = Column(Integer, ForeignKey("barbershops.id"))
     barbershop = relationship("Barbershop", back_populates="services")
+
+    is_active = Column(Boolean, default=True)
 
 class Appointment(Base):
     __tablename__ = "appointments"
@@ -65,10 +62,10 @@ class Appointment(Base):
     client_name = Column(String, nullable=False)
     phone = Column(String, nullable=False)
     service_name = Column(String, nullable=False)
-    time = Column(DateTime, nullable=False) # Data e Hora combinados
+    time = Column(DateTime, nullable=False)
     price = Column(Float, nullable=False)
     duration = Column(Integer, nullable=False)
-    status = Column(String, default="confirmed") # confirmed, completed, cancelled
+    status = Column(String, default="confirmed") 
 
     barbershop_id = Column(Integer, ForeignKey("barbershops.id"))
     barber_id = Column(Integer, ForeignKey("barbers.id"))
@@ -83,8 +80,8 @@ class Transaction(Base):
     description = Column(String, nullable=False)
     amount = Column(Float, nullable=False)
     type = Column(String, nullable=False) # "IN" ou "OUT"
-    category = Column(String, nullable=False) # Ex: "Corte", "Aluguel", "Produtos"
+    category = Column(String, nullable=False) 
     date = Column(DateTime, default=datetime.datetime.utcnow)
-    
+
     barbershop_id = Column(Integer, ForeignKey("barbershops.id"))
     barbershop = relationship("Barbershop", back_populates="transactions")

@@ -12,11 +12,18 @@ export default function BarbershopForm() {
     e.preventDefault();
     setLoading(true);
 
-    // Não mandamos mais open_time/close_time. O backend usará o DEFAULT_HOURS.
-    const data = { name, slug, email, password };
+    // Ajustado para bater com os nomes das colunas no seu Models.py
+    const data = {
+      name,
+      slug,
+      owner_email: email,
+      password_hash: password,
+    };
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/barbershops/", {
+      // Ajustado para a rota correta do Super Admin no seu main.py
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const response = await fetch(`${apiUrl}/super/barbershops`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
@@ -24,13 +31,19 @@ export default function BarbershopForm() {
 
       if (response.ok) {
         alert("Barbearia criada com sucesso!");
+        setName("");
+        setSlug("");
+        setEmail("");
+        setPassword("");
         window.location.reload();
       } else {
-        alert("Erro ao criar (Email ou Slug já existem).");
+        const errorData = await response.json();
+        alert(
+          `Erro ao criar: ${errorData.detail || "Email ou Slug já existem"}`,
+        );
       }
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
     } catch (error) {
-      alert("Erro de conexão.");
+      alert("Erro de conexão com o servidor.");
     } finally {
       setLoading(false);
     }
@@ -39,55 +52,59 @@ export default function BarbershopForm() {
   return (
     <form
       onSubmit={handleSubmit}
-      className="bg-white p-6 rounded-lg shadow-md border border-gray-200 text-black"
+      className="bg-white p-6 rounded-lg shadow-md border"
     >
-      <h3 className="text-lg font-bold mb-4">Cadastrar Nova Barbearia</h3>
+      <h3 className="text-xl font-bold mb-4 text-gray-800">
+        Cadastrar Nova Barbearia
+      </h3>
 
       <div className="flex flex-col gap-4">
         <input
           type="text"
           placeholder="Nome da Barbearia"
-          className="border p-2 rounded"
+          className="border p-2 rounded text-black"
           value={name}
           onChange={(e) => setName(e.target.value)}
           required
         />
         <input
           type="text"
-          placeholder="Slug (Link único)"
-          className="border p-2 rounded"
+          placeholder="Slug (Link único - ex: barbearia-do-jojo)"
+          className="border p-2 rounded text-black"
           value={slug}
           onChange={(e) => setSlug(e.target.value)}
           required
         />
         <input
           type="email"
-          placeholder="E-mail de Login"
-          className="border p-2 rounded"
+          placeholder="E-mail de Login do Proprietário"
+          className="border p-2 rounded text-black"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
         />
         <input
           type="password"
-          placeholder="Senha"
-          className="border p-2 rounded"
+          placeholder="Senha Inicial"
+          className="border p-2 rounded text-black"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
         />
 
         <p className="text-xs text-gray-500 italic">
-          * A barbearia será criada com horário padrão (Seg-Sáb). O proprietário
-          poderá alterar no painel dele.
+          * A barbearia será criada e o proprietário poderá gerenciar equipe e
+          serviços no painel dele.
         </p>
 
         <button
           type="submit"
           disabled={loading}
-          className="bg-green-600 text-white p-2 rounded font-bold hover:bg-green-700 disabled:bg-gray-400"
+          className={`p-2 rounded font-bold text-white transition-colors ${
+            loading ? "bg-gray-400" : "bg-green-600 hover:bg-green-700"
+          }`}
         >
-          {loading ? "Salvando..." : "Criar Conta"}
+          {loading ? "Criando..." : "Criar Barbearia"}
         </button>
       </div>
     </form>
