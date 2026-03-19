@@ -14,6 +14,7 @@ import {
   Clock,
   DollarSign,
 } from "lucide-react";
+import { API_BASE_URL } from "../../utils/apiConfig";
 
 export default function Servicos() {
   const router = useRouter();
@@ -120,7 +121,7 @@ export default function Servicos() {
     try {
       const url = editingId
         ? `http://127.0.0.1:8000/admin/services/${editingId}`
-        : "http://127.0.0.1:8000/admin/services";
+        : `${API_BASE_URL}/admin/services`;
       const method = editingId ? "PUT" : "POST";
 
       const response = await fetch(url, {

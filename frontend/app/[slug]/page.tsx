@@ -19,10 +19,10 @@ import {
   Phone,
   ImageIcon,
 } from "lucide-react";
+import { API_BASE_URL } from "../utils/apiConfig";
 
 export default function PaginaCliente() {
-  const BACKEND_URL =
-    process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:8000";
+  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || API_BASE_URL;
 
   const getImageUrl = (imageString: string | null | undefined) => {
     if (!imageString) return "";
@@ -144,7 +144,7 @@ export default function PaginaCliente() {
         barbershop_id: Number(shop.id),
       };
 
-      const res = await fetch("http://127.0.0.1:8000/appointments", {
+      const res = await fetch(`${API_BASE_URL}/appointments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

@@ -56,7 +56,7 @@ export default function FinanceDashboard() {
 
       try {
         const res = await fetch(
-          `http://127.0.0.1:8000/admin/${barbershopId}/financeiro?role=${userRole}`,
+          `${process.env.NEXT_PUBLIC_API_URL}/admin/${barbershopId}/financeiro?role=${userRole}`,
           { headers },
         );
         if (res.status === 401 || res.status === 403)
@@ -81,7 +81,7 @@ export default function FinanceDashboard() {
 
     try {
       const res = await fetch(
-        `http://127.0.0.1:8000/admin/${barbershopId}/close-register`,
+        `${process.env.NEXT_PUBLIC_API_URL}/admin/${barbershopId}/close-register`,
         {
           method: "POST",
           headers,

@@ -17,7 +17,7 @@ export default function SuperAdminLogin() {
     const tid = toast.loading("Autenticando...");
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/auth/login-super", {
+      const res = await fetch(${process.env.NEXT_PUBLIC_API_URL}/auth/login-super", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),

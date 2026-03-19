@@ -23,7 +23,7 @@ export default function Equipe() {
   const [user, setUser] = useState<any>(null);
   const [barbers, setBarbers] = useState<any[]>([]);
   const BACKEND_URL =
-    process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:8000";
+    process.env.NEXT_PUBLIC_BACKEND_URL || ${process.env.NEXT_PUBLIC_API_URL}";
 
   const getImageUrl = (imageString: string | null | undefined) => {
     if (!imageString) return "";
@@ -87,7 +87,7 @@ export default function Equipe() {
     try {
       // Agora chamamos a rota que traz os ganhos mensais!
       const res = await fetch(
-        `http://127.0.0.1:8000/admin/barbershops/${shopId}/team-earnings`,
+        `${process.env.NEXT_PUBLIC_API_URL}/admin/barbershops/${shopId}/team-earnings`,
         { headers },
       );
       if (res.ok) {
@@ -128,7 +128,7 @@ export default function Equipe() {
 
         // 3. Envia para o seu backend (ajuste a rota se necessário)
         const response = await fetch(
-          `http://127.0.0.1:8000/admin/barbers/${barberId}/photo`,
+          `${process.env.NEXT_PUBLIC_API_URL}/admin/barbers/${barberId}/photo`,
           {
             method: "PUT",
             headers: {
@@ -160,7 +160,7 @@ export default function Equipe() {
 
     try {
       const res = await fetch(
-        `http://127.0.0.1:8000/admin/barbers/${barberId}/toggle`,
+        `${process.env.NEXT_PUBLIC_API_URL}/admin/barbers/${barberId}/toggle`,
         {
           method: "PUT",
           headers,

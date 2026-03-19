@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { fetchComSeguranca } from "../utils/api";
+import { API_BASE_URL } from "../utils/apiConfig";
 
 export default function SuperAdmin() {
   const router = useRouter();
@@ -69,7 +70,7 @@ export default function SuperAdmin() {
 
     try {
       const response = await fetchComSeguranca(
-        "http://127.0.0.1:8000/superadmin/barbershops",
+        `${API_BASE_URL}/superadmin/barbershops`,
         { headers },
       );
 
@@ -129,21 +130,18 @@ export default function SuperAdmin() {
     setLoading(true);
     const tid = toast.loading("Criando barbearia...");
     try {
-      const response = await fetch(
-        "http://127.0.0.1:8000/superadmin/barbershops",
-        {
-          method: "POST",
-          headers, // <-- Chave enviada aqui
-          body: JSON.stringify({
-            name: shopName,
-            slug: slug.toLowerCase().replace(/ /g, "-"),
-            owner_name: ownerName,
-            owner_email: ownerEmail,
-            password,
-            initial_pin: "1234",
-          }),
-        },
-      );
+      const response = await fetch(`${API_BASE_URL}/superadmin/barbershops`, {
+        method: "POST",
+        headers, // <-- Chave enviada aqui
+        body: JSON.stringify({
+          name: shopName,
+          slug: slug.toLowerCase().replace(/ /g, "-"),
+          owner_name: ownerName,
+          owner_email: ownerEmail,
+          password,
+          initial_pin: "1234",
+        }),
+      });
       if (!response.ok) {
         // Isso vai capturar a mensagem EXATA do Python (ex: "E-mail já cadastrado")
         const errorData = await response.json();
@@ -195,7 +193,7 @@ export default function SuperAdmin() {
 
     const tid = toast.loading("A criar funcionário...");
     try {
-      const response = await fetch("http://127.0.0.1:8000/super/barbers", {
+      const response = await fetch(`${API_BASE_URL}/super/barbers`, {
         method: "POST",
         headers,
         body: JSON.stringify({

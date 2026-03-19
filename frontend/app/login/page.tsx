@@ -39,7 +39,7 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await fetch("http://127.0.0.1:8000/auth/verify-shop", {
+      const res = await fetch(${process.env.NEXT_PUBLIC_API_URL}/auth/verify-shop", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
@@ -72,7 +72,7 @@ export default function Login() {
     const tid = toast.loading("Verificando acesso...");
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/auth/login-pin", {
+      const res = await fetch(${process.env.NEXT_PUBLIC_API_URL}/auth/login-pin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ shop_id: shopData.shop_id, pin }),

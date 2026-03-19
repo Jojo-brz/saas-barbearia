@@ -24,7 +24,7 @@ export default function LoginBarbeiro() {
     const tid = toast.loading("Verificando PIN...");
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/auth/login-pin", {
+      const res = await fetch(${process.env.NEXT_PUBLIC_API_URL}/auth/login-pin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ slug: slug.toLowerCase(), pin }),

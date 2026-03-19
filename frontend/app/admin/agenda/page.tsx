@@ -55,7 +55,7 @@ export default function AgendaMobile() {
     try {
       // Carrega a Agenda apresentando o token
       const resAgenda = await fetch(
-        `http://127.0.0.1:8000/admin/${barbershopId}/appointments`,
+        `${process.env.NEXT_PUBLIC_API_URL}/admin/${barbershopId}/appointments`,
         { headers },
       );
 
@@ -70,7 +70,7 @@ export default function AgendaMobile() {
 
       // Carrega o Estoque apresentando o token
       const resStock = await fetch(
-        `http://127.0.0.1:8000/admin/${barbershopId}/products`,
+        `${process.env.NEXT_PUBLIC_API_URL}/admin/${barbershopId}/products`,
         { headers },
       );
       const dataStock = await resStock.json();
@@ -100,7 +100,7 @@ export default function AgendaMobile() {
     try {
       // Usamos a rota de status que vamos garantir que está no main.py
       const res = await fetch(
-        `http://127.0.0.1:8000/admin/appointments/${id}/status`,
+        `${process.env.NEXT_PUBLIC_API_URL}/admin/appointments/${id}/status`,
         {
           method: "PATCH",
           headers: headers,
@@ -139,7 +139,7 @@ export default function AgendaMobile() {
     try {
       // Note que aqui não enviamos "body", logo podemos passar apenas os headers
       const res = await fetch(
-        `http://127.0.0.1:8000/admin/products/${productId}/sell`,
+        `${process.env.NEXT_PUBLIC_API_URL}/admin/products/${productId}/sell`,
         {
           method: "PATCH",
           headers: headers,

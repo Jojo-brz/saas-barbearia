@@ -55,7 +55,7 @@ export default function InventoryMobile() {
 
     try {
       const res = await fetch(
-        `http://127.0.0.1:8000/admin/${barbershopId}/products`,
+        `${process.env.NEXT_PUBLIC_API_URL}/admin/${barbershopId}/products`,
         { headers },
       );
       if (res.status === 401 || res.status === 403) {
@@ -82,7 +82,7 @@ export default function InventoryMobile() {
     setLoading(true);
     try {
       const res = await fetch(
-        `http://127.0.0.1:8000/admin/${barbershopId}/products`,
+        `${process.env.NEXT_PUBLIC_API_URL}/admin/${barbershopId}/products`,
         {
           method: "POST",
           headers,
@@ -119,10 +119,13 @@ export default function InventoryMobile() {
     if (!headers) return;
 
     try {
-      const res = await fetch(`http://127.0.0.1:8000/admin/products/${id}`, {
-        method: "DELETE",
-        headers,
-      });
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/admin/products/${id}`,
+        {
+          method: "DELETE",
+          headers,
+        },
+      );
 
       if (res.ok) {
         toast.success("Produto removido");
@@ -141,7 +144,7 @@ export default function InventoryMobile() {
 
     try {
       const res = await fetch(
-        `http://127.0.0.1:8000/admin/products/${id}/sell`,
+        `${process.env.NEXT_PUBLIC_API_URL}/admin/products/${id}/sell`,
         {
           method: "PATCH",
           headers,
@@ -177,7 +180,7 @@ export default function InventoryMobile() {
     const tid = toast.loading("Adicionando ao estoque...");
     try {
       const res = await fetch(
-        `http://127.0.0.1:8000/admin/products/${id}/restock`,
+        `${process.env.NEXT_PUBLIC_API_URL}/admin/products/${id}/restock`,
         {
           method: "PATCH",
           headers,

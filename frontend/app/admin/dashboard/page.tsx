@@ -70,7 +70,7 @@ export default function Dashboard() {
     try {
       const token = localStorage.getItem("saas_token");
       const res = await fetchComSeguranca(
-        "http://127.0.0.1:8000/admin/venda-balcao",
+        ${process.env.NEXT_PUBLIC_API_URL}/admin/venda-balcao",
         {
           method: "POST",
           headers: {

@@ -24,7 +24,7 @@ export default function PerfilBarbearia() {
 
   // Define a URL base para as imagens
   const BACKEND_URL =
-    process.env.NEXT_PUBLIC_BACKEND_URL || "http://127.0.0.1:8000";
+    process.env.NEXT_PUBLIC_BACKEND_URL || ${process.env.NEXT_PUBLIC_API_URL}";
 
   // Estados do Perfil
   const [description, setDescription] = useState("");
