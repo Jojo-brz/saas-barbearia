@@ -74,9 +74,18 @@ Base.metadata.create_all(bind=engine)
 
 frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
+# Lista de sites que têm permissão para aceder ao seu Backend
+frontend_url = os.getenv("FRONTEND_URL", "https://seu-projeto.vercel.app")
+
+origens_permitidas = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    frontend_url  # <--- Puxa o link automaticamente da variável!
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[frontend_url, "http://localhost:3000", "http://127.0.0.1:3000"], 
+    allow_origins=origens_permitidas, # Aqui usamos a lista que criámos acima
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
