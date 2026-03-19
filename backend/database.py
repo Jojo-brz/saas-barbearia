@@ -1,21 +1,29 @@
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+import os
+from dotenv import load_dotenv
 
-# Nome do arquivo do banco de dados
-SQLALCHEMY_DATABASE_URL = "sqlite:///./database.db"
+load_dotenv()
 
-# O connect_args é necessário apenas para o SQLite
-engine = create_engine(
-    SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
-)
+# Pega a URL do banco de dados do arquivo .env ou do servidor
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-# É aqui que o erro acontecia: Precisamos definir o SessionLocal
+# Lógica inteligente: verifica qual banco estamos a usar
+if DATABASE_URL and DATABASE_URL.startswith("sqlite"):
+    # Se for SQLite (no seu computador), usamos o check_same_thread
+    engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+else:
+    # Se for Postgres (no Render), NÃO usamos o check_same_thread
+    # E corrigimos a URL caso o Render entregue "postgres://" em vez de "postgresql://"
+    if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+    
+    engine = create_engine(DATABASE_URL)
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
 Base = declarative_base()
 
-# Função para as rotas do FastAPI obterem o banco
 def get_db():
     db = SessionLocal()
     try:

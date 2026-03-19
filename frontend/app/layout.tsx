@@ -1,18 +1,13 @@
-import type { Metadata, Viewport } from "next";
+import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import { Toaster } from "react-hot-toast";
 import "./globals.css";
+import { Toaster } from "react-hot-toast";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "BarberSaaS",
-  description: "Sistema de Gestão para Barbearias",
-  manifest: "/manifest.json",
-};
-
-export const viewport: Viewport = {
-  themeColor: "#09090b",
+  title: "SaaS Barbearia",
+  description: "Gestão inteligente para sua barbearia",
 };
 
 export default function RootLayout({
@@ -22,26 +17,18 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
-      <body className={inter.className}>
-        {/* CONFIGURAÇÃO DO TOASTER (AVISOS) */}
+      <body
+        className={`${inter.className} bg-zinc-50 text-zinc-900 antialiased`}
+      >
+        {/* Este Toaster é o que faz a mágica de flutuar as mensagens na tela */}
         <Toaster
-          position="bottom-center"
+          position="top-center"
           toastOptions={{
+            duration: 3000,
             style: {
-              background: "#333",
+              background: "#3f3f46",
               color: "#fff",
-            },
-            success: {
-              iconTheme: {
-                primary: "#16a34a", // Verde
-                secondary: "#fff",
-              },
-            },
-            error: {
-              iconTheme: {
-                primary: "#dc2626", // Vermelho
-                secondary: "#fff",
-              },
+              borderRadius: "10px",
             },
           }}
         />

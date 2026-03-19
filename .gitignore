@@ -1,15 +1,51 @@
-# Python
-backend/venv/
-backend/__pycache__/
-backend/*.pyc
-backend/database.db
-backend/data
-
-# Node/Frontend
-frontend/node_modules/
-frontend/.next/
-frontend/out/
-
-# Env vars
+# =========================
+# 1. SEGURANÇA E SENHAS
+# =========================
 .env
+.env.local
+.env.development
+.env.production
+*.pem
+secrets.json
+
+# =========================
+# 2. BANCO DE DADOS E UPLOADS (D-Barber)
+# =========================
+# Não queremos subir o banco de testes do seu computador
+*.db
+*.sqlite3
+barbearia.db
+
+# Não queremos subir as fotos locais de teste para o servidor
+uploads/
+/uploads/*
+!uploads/.gitkeep  # (Opcional) Mantém a pasta vazia no repositório
+
+# =========================
+# 3. PYTHON / FASTAPI (Backend)
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# =========================
+# 4. NEXT.JS / NODE.JS (Frontend)
+# =========================
+node_modules/
+npm-debug.log
+yarn-error.log
+.pnp.*
+.next/
+out/
+build/
+
+# =========================
+# 5. SISTEMA OPERACIONAL
+# =========================
 .DS_Store
+Thumbs.db
