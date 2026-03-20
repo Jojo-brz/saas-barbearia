@@ -22,8 +22,7 @@ export default function Equipe() {
   const router = useRouter();
   const [user, setUser] = useState<any>(null);
   const [barbers, setBarbers] = useState<any[]>([]);
-  const BACKEND_URL =
-    process.env.NEXT_PUBLIC_BACKEND_URL || ${process.env.NEXT_PUBLIC_API_URL}";
+  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
   const getImageUrl = (imageString: string | null | undefined) => {
     if (!imageString) return "";
