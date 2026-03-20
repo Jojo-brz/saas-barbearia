@@ -17,11 +17,14 @@ export default function SuperAdminLogin() {
     const tid = toast.loading("Autenticando...");
 
     try {
-      const res = await fetch(${process.env.NEXT_PUBLIC_API_URL}/auth/login-super", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/auth/login-super`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        },
+      );
 
       if (res.ok) {
         const data = await res.json();
