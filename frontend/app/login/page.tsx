@@ -39,11 +39,14 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     try {
-      const res = await fetch(${process.env.NEXT_PUBLIC_API_URL}/auth/verify-shop", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/auth/verify-shop`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        },
+      );
 
       if (!res.ok) throw new Error("Credenciais da loja inválidas");
 
@@ -72,11 +75,14 @@ export default function Login() {
     const tid = toast.loading("Verificando acesso...");
 
     try {
-      const res = await fetch(${process.env.NEXT_PUBLIC_API_URL}/auth/login-pin", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ shop_id: shopData.shop_id, pin }),
-      });
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/auth/login-pin`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ shop_id: shopData.shop_id, pin }),
+        },
+      );
 
       if (!res.ok) {
         const err = await res.json();

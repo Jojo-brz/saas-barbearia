@@ -22,6 +22,7 @@ export default function Servicos() {
   const [services, setServices] = useState<any[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
@@ -70,7 +71,7 @@ export default function Servicos() {
     if (!headers) return;
     try {
       const response = await fetch(
-        `http://127.0.0.1:8000/barbershops/${shopId}/services`,
+        `${BACKEND_URL}/barbershops/${shopId}/services`,
         { headers },
       );
       if (response.ok) {

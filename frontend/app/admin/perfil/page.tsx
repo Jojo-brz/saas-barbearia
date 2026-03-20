@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable @next/next/no-img-element */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -23,8 +24,7 @@ export default function PerfilBarbearia() {
   const [isEditing, setIsEditing] = useState(false);
 
   // Define a URL base para as imagens
-  const BACKEND_URL =
-    process.env.NEXT_PUBLIC_BACKEND_URL || ${process.env.NEXT_PUBLIC_API_URL}";
+  const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
 
   // Estados do Perfil
   const [description, setDescription] = useState("");
@@ -37,56 +37,6 @@ export default function PerfilBarbearia() {
   const [closeTime, setCloseTime] = useState("19:00");
   const [intervalStart, setIntervalStart] = useState("12:00");
   const [intervalEnd, setIntervalEnd] = useState("13:00");
-
-  useEffect(() => {
-    const storedUser = localStorage.getItem("saas_user");
-    const connectedShop = localStorage.getItem("connected_shop"); // Vai buscar a loja salva no Passo 1 do Login
-
-    if (storedUser) {
-      const parsedUser = JSON.parse(storedUser);
-
-      // Tenta achar o slug no user, se não tiver, pega do connectedShop
-      let shopSlug = parsedUser.slug;
-      if (!shopSlug && connectedShop) {
-        shopSlug = JSON.parse(connectedShop).slug;
-        parsedUser.slug = shopSlug; // Já adiciona o slug ao usuário na memória
-      }
-
-      setUser(parsedUser);
-
-      // Agora o slug existe com certeza, então ele carrega as fotos e os dados!
-      if (shopSlug && shopSlug !== "undefined") {
-        fetchShop(shopSlug);
-      }
-    }
-  }, []);
-  const getImageUrl = (imageString: string | null | undefined) => {
-    if (!imageString) return "";
-
-    // 1. Se a string já for um Base64 real (começa com data:image), exibe diretamente
-    if (imageString.startsWith("data:image")) {
-      return imageString;
-    }
-
-    // 2. Se a string já for um link completo (começa com http), exibe diretamente
-    if (imageString.startsWith("http")) {
-      return imageString;
-    }
-
-    // 3. Se for apenas o nome do ficheiro (ex: 39c98c8ae82e444282ac8610a01b82d1.jpeg),
-    // aponta para o backend na porta 8000!
-    // Remove a barra inicial se existir para evitar "//"
-    const cleanPath = imageString.startsWith("/")
-      ? imageString.substring(1)
-      : imageString;
-
-    // Verifica se o caminho já tem "uploads/", se não tiver, adiciona
-    if (cleanPath.startsWith("uploads/")) {
-      return `${BACKEND_URL}/${cleanPath}`;
-    } else {
-      return `${BACKEND_URL}/uploads/${cleanPath}`;
-    }
-  };
 
   const fetchShop = async (slug: string) => {
     try {
@@ -113,6 +63,57 @@ export default function PerfilBarbearia() {
       }
     } catch (err) {
       console.error("Erro ao carregar dados da barbearia");
+    }
+  };
+
+  useEffect(() => {
+    const storedUser = localStorage.getItem("saas_user");
+    const connectedShop = localStorage.getItem("connected_shop"); // Vai buscar a loja salva no Passo 1 do Login
+
+    if (storedUser) {
+      const parsedUser = JSON.parse(storedUser);
+
+      // Tenta achar o slug no user, se não tiver, pega do connectedShop
+      let shopSlug = parsedUser.slug;
+      if (!shopSlug && connectedShop) {
+        shopSlug = JSON.parse(connectedShop).slug;
+        parsedUser.slug = shopSlug; // Já adiciona o slug ao usuário na memória
+      }
+
+      setUser(parsedUser);
+
+      // Agora o slug existe com certeza, então ele carrega as fotos e os dados!
+      if (shopSlug && shopSlug !== "undefined") {
+        fetchShop(shopSlug);
+      }
+    }
+  }, []);
+
+  const getImageUrl = (imageString: string | null | undefined) => {
+    if (!imageString) return "";
+
+    // 1. Se a string já for um Base64 real (começa com data:image), exibe diretamente
+    if (imageString.startsWith("data:image")) {
+      return imageString;
+    }
+
+    // 2. Se a string já for um link completo (começa com http), exibe diretamente
+    if (imageString.startsWith("http")) {
+      return imageString;
+    }
+
+    // 3. Se for apenas o nome do ficheiro (ex: 39c98c8ae82e444282ac8610a01b82d1.jpeg),
+    // aponta para o backend na porta 8000!
+    // Remove a barra inicial se existir para evitar "//"
+    const cleanPath = imageString.startsWith("/")
+      ? imageString.substring(1)
+      : imageString;
+
+    // Verifica se o caminho já tem "uploads/", se não tiver, adiciona
+    if (cleanPath.startsWith("uploads/")) {
+      return `${BACKEND_URL}/${cleanPath}`;
+    } else {
+      return `${BACKEND_URL}/uploads/${cleanPath}`;
     }
   };
 
