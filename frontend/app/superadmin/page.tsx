@@ -130,6 +130,7 @@ export default function SuperAdmin() {
     setLoading(true);
     const tid = toast.loading("Criando barbearia...");
     try {
+      console.log("SENHA QUE ESTÁ A SER ENVIADA:", password);
       const response = await fetch(`${API_BASE_URL}/superadmin/barbershops`, {
         method: "POST",
         headers, // <-- Chave enviada aqui
