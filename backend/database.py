@@ -14,12 +14,12 @@ if DATABASE_URL and DATABASE_URL.startswith("sqlite"):
     # Se for SQLite (no seu computador), usamos o check_same_thread
     engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 else:
-    # Se for Postgres (no Render), NÃO usamos o check_same_thread
-    # E corrigimos a URL caso o Render entregue "postgres://" em vez de "postgresql://"
+    # Se for Postgres, corrigimos a URL caso venha como "postgres://" em vez de "postgresql://"
     if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
         DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
     
-    engine = create_engine(DATABASE_URL)
+    # ✅ AQUI ESTÁ A MAGIA PARA O NEON NÃO DORMIR:
+    engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()

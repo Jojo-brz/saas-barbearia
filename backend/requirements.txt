@@ -1,5 +1,6 @@
 fastapi
 uvicorn
+bcrypt==3.2.2
 sqlalchemy
 pydantic
 python-dotenv
